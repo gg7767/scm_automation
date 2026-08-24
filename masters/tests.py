@@ -1,9 +1,12 @@
 import datetime
+import tempfile
 from decimal import Decimal
+from pathlib import Path
 
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 
@@ -280,3 +283,108 @@ class ItemAliasViewTests(TestCase):
         )
         self.assertRedirects(response, reverse("masters:item_detail", args=[self.item.pk]))
         self.assertFalse(ItemAlias.objects.filter(pk=alias.pk).exists())
+
+
+# --- CSV import ------------------------------------------------------
+
+class ImportLegacyCsvTests(TestCase):
+    def _write_csv(self, name, text):
+        tmpdir = tempfile.mkdtemp()
+        path = Path(tmpdir) / name
+        path.write_text(text, encoding="utf-8")
+        return str(path)
+
+    def test_import_vendors_creates_and_is_idempotent(self):
+        path = self._write_csv("vendors.csv", (
+            "name,gstin,state,payment_terms_days\n"
+            "ABC Traders,36ABCDE1234F1Z5,TG,45\n"
+            "XYZ Suppliers,,MH,30\n"
+        ))
+        call_command("import_legacy_csv", vendors_csv=path)
+        self.assertEqual(Vendor.objects.count(), 2)
+        abc = Vendor.objects.get(gstin="36ABCDE1234F1Z5")
+        self.assertEqual(abc.payment_terms_days, 45)
+        self.assertEqual(abc.state, "TG")
+
+        call_command("import_legacy_csv", vendors_csv=path)
+        self.assertEqual(Vendor.objects.count(), 2)
+
+    def test_import_vendors_matches_existing_by_gstin(self):
+        Vendor.objects.create(name="Old Name Pvt Ltd", gstin="36ABCDE1234F1Z5")
+        path = self._write_csv("vendors.csv", (
+            "name,gstin\nNew Name Pvt Ltd,36ABCDE1234F1Z5\n"
+        ))
+        call_command("import_legacy_csv", vendors_csv=path)
+        self.assertEqual(Vendor.objects.count(), 1)
+        self.assertEqual(Vendor.objects.first().name, "New Name Pvt Ltd")
+
+    def test_import_vendors_matches_existing_by_name_when_no_gstin(self):
+        Vendor.objects.create(name="ABC Traders")
+        path = self._write_csv("vendors.csv", (
+            "name,state\nabc traders,TG\n"
+        ))
+        call_command("import_legacy_csv", vendors_csv=path)
+        self.assertEqual(Vendor.objects.count(), 1)
+        self.assertEqual(Vendor.objects.first().state, "TG")
+
+    def test_import_items_creates_category_and_item(self):
+        path = self._write_csv("items.csv", (
+            "name,category,unit,gst_rate,hsn_code\n"
+            "OPC 53 Grade Cement,Cement,BAG,28.00,2523\n"
+        ))
+        call_command("import_legacy_csv", items_csv=path)
+        item = Item.objects.get(name="OPC 53 Grade Cement")
+        self.assertEqual(item.category.name, "Cement")
+        self.assertEqual(item.unit, Item.Unit.BAG)
+        self.assertEqual(item.gst_rate, Decimal("28.00"))
+
+    def test_import_items_is_idempotent(self):
+        path = self._write_csv("items.csv", (
+            "name,category,unit\nOPC 53 Grade Cement,Cement,BAG\n"
+        ))
+        call_command("import_legacy_csv", items_csv=path)
+        call_command("import_legacy_csv", items_csv=path)
+        self.assertEqual(Item.objects.count(), 1)
+
+    def test_import_items_alias_maps_to_existing_canonical_item(self):
+        category = ItemCategory.objects.create(name="Cement")
+        canonical = Item.objects.create(name="OPC 53 Grade Cement", category=category, unit=Item.Unit.BAG)
+        path = self._write_csv("items.csv", (
+            "name,category,unit,alias_of\n"
+            "OPC53 CEMENT BAG,,,OPC 53 Grade Cement\n"
+        ))
+        call_command("import_legacy_csv", items_csv=path)
+        self.assertEqual(Item.objects.count(), 1)
+        self.assertTrue(
+            ItemAlias.objects.filter(item=canonical, alias_name="OPC53 CEMENT BAG").exists()
+        )
+
+    def test_import_items_alias_of_unknown_item_reports_error_without_crashing(self):
+        path = self._write_csv("items.csv", (
+            "name,category,unit,alias_of\n"
+            "Mystery Alias,,,Nonexistent Item\n"
+        ))
+        call_command("import_legacy_csv", items_csv=path)
+        self.assertEqual(Item.objects.count(), 0)
+        self.assertEqual(ItemAlias.objects.count(), 0)
+
+    def test_import_items_bad_unit_skips_row_but_continues(self):
+        path = self._write_csv("items.csv", (
+            "name,category,unit\n"
+            "Bad Row,Cement,NOTAUNIT\n"
+            "Good Row,Cement,BAG\n"
+        ))
+        call_command("import_legacy_csv", items_csv=path)
+        self.assertEqual(Item.objects.count(), 1)
+        self.assertTrue(Item.objects.filter(name="Good Row").exists())
+
+    def test_missing_required_column_raises(self):
+        path = self._write_csv("vendors.csv", "notname\nfoo\n")
+        from django.core.management.base import CommandError
+        with self.assertRaises(CommandError):
+            call_command("import_legacy_csv", vendors_csv=path)
+
+    def test_no_arguments_raises(self):
+        from django.core.management.base import CommandError
+        with self.assertRaises(CommandError):
+            call_command("import_legacy_csv")

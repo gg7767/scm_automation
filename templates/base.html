@@ -19,6 +19,9 @@
                     {% if can_view_po %}
                     <a href="{% url 'purchase:po_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Purchase Orders</a>
                     {% endif %}
+                    {% if can_view_vendor_ledgers %}
+                    <a href="{% url 'purchase:vendor_ledger_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Vendor Ledgers</a>
+                    {% endif %}
                     {% if is_masters_manager %}
                     <a href="{% url 'masters:site_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Sites</a>
                     <a href="{% url 'masters:category_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Categories</a>
@@ -48,6 +51,9 @@
             <div id="nav-menu" class="hidden sm:hidden pb-4 flex flex-col gap-2 text-sm">
                 {% if can_view_po %}
                 <a href="{% url 'purchase:po_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Purchase Orders</a>
+                {% endif %}
+                {% if can_view_vendor_ledgers %}
+                <a href="{% url 'purchase:vendor_ledger_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Vendor Ledgers</a>
                 {% endif %}
                 {% if is_masters_manager %}
                 <a href="{% url 'masters:site_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Sites</a>

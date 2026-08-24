@@ -469,6 +469,24 @@ class VendorLedgerViewTests(TestCase):
         self.assertContains(response, po2.po_number)
 
 
+class VendorLedgerListViewTests(TestCase):
+    def test_accounts_role_can_reach_vendor_ledger_list(self):
+        Vendor.objects.create(name="ABC Traders")
+        user = User.objects.create_user(username="accountant", password="pass12345")
+        user.groups.add(Group.objects.create(name="Accounts"))
+        self.client.login(username="accountant", password="pass12345")
+        response = self.client.get(reverse("purchase:vendor_ledger_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "ABC Traders")
+
+    def test_site_member_cannot_reach_vendor_ledger_list(self):
+        user = User.objects.create_user(username="siteuser", password="pass12345")
+        user.groups.add(Group.objects.create(name="Site Member"))
+        self.client.login(username="siteuser", password="pass12345")
+        response = self.client.get(reverse("purchase:vendor_ledger_list"))
+        self.assertEqual(response.status_code, 403)
+
+
 class POAttachmentViewTests(TestCase):
     def setUp(self):
         self.site = Site.objects.create(name="Hyderabad Factory 1", code="HYD-F1")

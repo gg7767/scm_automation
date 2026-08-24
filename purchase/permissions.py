@@ -19,6 +19,16 @@ class POManageRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
         return roles.can_manage_purchase_orders(self.request.user)
 
 
+class VendorLedgerViewRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
+    """Vendor ledgers aggregate a vendor's POs across all sites, so this is
+    narrower than POViewRequiredMixin: Site Members are excluded (their PO
+    visibility is meant to stay scoped to their own site's POs)."""
+
+    def test_func(self):
+        user = self.request.user
+        return roles.can_view_purchase_orders(user) and not roles.is_site_restricted(user)
+
+
 def visible_po_queryset(user, queryset):
     if roles.is_site_restricted(user):
         site = roles.user_site(user)

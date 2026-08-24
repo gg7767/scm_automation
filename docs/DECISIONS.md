@@ -79,4 +79,24 @@ One line per notable decision, most recent last.
 - Dashboard (lite) lives on the existing home page (`config/views.py`)
   rather than a separate `/dashboard/` URL — it's the natural landing
   page and avoids a redundant route; it only renders PO widgets for users
-  who have `can_view_purchase_orders`.
+  who have `can_view_purchase orders`.
+- `import_legacy_csv` (build step 10) lives in `masters` (owns Vendor/
+  Item/ItemAlias) and takes `--vendors`/`--items` CSV paths independently.
+  Vendors match by GSTIN when present, else case-insensitive name — both
+  create-or-update, so re-running a corrected export is safe. Items
+  support an `alias_of` column: a row with it set only registers an
+  `ItemAlias` onto an existing canonical item (matched by name or an
+  existing alias) instead of creating a new item — this is the "map messy
+  legacy Excel names onto one canonical item" mechanism from CLAUDE.md.
+  Each row is validated and saved in its own savepoint (nested
+  `transaction.atomic()`), so one bad row is skipped and reported without
+  aborting the rest of the file.
+- Permissions audit (step 10) found and fixed one real gap: vendor
+  ledgers aggregate a vendor's POs across *all* sites, but
+  `POViewRequiredMixin` (used for POs themselves) allows Site Member —
+  which would have let a Site Member see other sites' PO data through the
+  ledger route. Added `VendorLedgerViewRequiredMixin`, narrower than
+  `POViewRequiredMixin`, that excludes site-restricted users; nav links
+  and the vendor-detail "PO ledger" link now gate on a matching
+  `can_view_vendor_ledgers` context flag instead of the broader
+  `can_view_po`.

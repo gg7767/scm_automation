@@ -4,7 +4,7 @@
 <div class="flex items-center justify-between mb-4">
     <h1 class="text-xl font-semibold text-slate-900">{{ vendor.code }} — {{ vendor.name }}</h1>
     <div class="flex gap-2">
-        {% if can_view_po %}
+        {% if can_view_vendor_ledgers %}
         <a href="{% url 'purchase:vendor_ledger' vendor.pk %}" class="px-4 py-2 rounded border border-slate-300 text-sm font-medium hover:bg-slate-50">PO ledger</a>
         {% endif %}
         <a href="{% url 'masters:vendor_update' vendor.pk %}" class="px-4 py-2 rounded border border-slate-300 text-sm font-medium hover:bg-slate-50">Edit</a>

@@ -28,5 +28,6 @@ urlpatterns = [
     path("<int:pk>/attachments/add/", views.POAttachmentCreateView.as_view(), name="po_attachment_create"),
     path("<int:pk>/attachments/<int:att_pk>/delete/", views.POAttachmentDeleteView.as_view(), name="po_attachment_delete"),
 
+    path("vendors/", views.VendorLedgerListView.as_view(), name="vendor_ledger_list"),
     path("vendors/<int:pk>/ledger/", views.VendorLedgerView.as_view(), name="vendor_ledger"),
 ]

@@ -25,7 +25,12 @@ from purchase.models import (
     PurchaseOrder,
     PurchaseOrderLine,
 )
-from purchase.permissions import POManageRequiredMixin, POViewRequiredMixin, visible_po_queryset
+from purchase.permissions import (
+    POManageRequiredMixin,
+    POViewRequiredMixin,
+    VendorLedgerViewRequiredMixin,
+    visible_po_queryset,
+)
 
 PAGE_SIZE = 20
 
@@ -351,7 +356,31 @@ class POPdfView(POViewRequiredMixin, View):
         return response
 
 
-class VendorLedgerView(POViewRequiredMixin, DetailView):
+class VendorLedgerListView(VendorLedgerViewRequiredMixin, ListView):
+    model = Vendor
+    template_name = "purchase/vendor_ledger_list.html"
+    context_object_name = "vendors"
+    paginate_by = PAGE_SIZE
+
+    def get_queryset(self):
+        qs = Vendor.objects.all()
+        q = self.request.GET.get("q", "").strip()
+        if q:
+            qs = qs.filter(Q(name__icontains=q) | Q(code__icontains=q))
+        return qs
+
+    def get_context_data(self, **kwargs):
+        from purchase.services import vendor_ledger
+
+        ctx = super().get_context_data(**kwargs)
+        ctx["q"] = self.request.GET.get("q", "")
+        ctx["vendor_rows"] = [
+            {"vendor": v, "open_value": vendor_ledger(v)["open_value"]} for v in ctx["vendors"]
+        ]
+        return ctx
+
+
+class VendorLedgerView(VendorLedgerViewRequiredMixin, DetailView):
     model = Vendor
     template_name = "purchase/vendor_ledger.html"
     context_object_name = "vendor"

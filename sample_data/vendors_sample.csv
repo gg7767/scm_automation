@@ -1,0 +1,4 @@
+name,gstin,pan,address,state,contact_person,phone,email,bank_name,account_number,ifsc,payment_terms_days,tally_ledger_name
+Sri Lakshmi Cement Traders,36ABCDE1234F1Z5,ABCDE1234F,"Plot 12, Industrial Area, Hyderabad",TG,Ramesh Kumar,9876543210,ramesh@example.com,HDFC Bank,123456789012,HDFC0001234,45,Sri Lakshmi Cement Traders
+Chennai Steel Corp,33PQRST5678G1Z2,PQRST5678G,"Guindy Industrial Estate, Chennai",TN,Suresh Iyer,9123456789,suresh@example.com,ICICI Bank,987654321098,ICIC0005678,30,Chennai Steel Corp
+Unregistered Hardware Mart,,,"Market Road, Hyderabad",TG,,9988776655,,,,,15,
