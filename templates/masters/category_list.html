@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Item Categories &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-semibold text-slate-900">Item Categories</h1>
+    <a href="{% url 'masters:category_create' %}" class="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800">+ New category</a>
+</div>
+
+<form method="get" class="bg-white rounded-lg shadow p-4 mb-4 flex flex-wrap gap-3 items-end">
+    <div class="flex-1 min-w-[180px]">
+        <label class="block text-xs font-medium text-slate-500">Search</label>
+        <input type="text" name="q" value="{{ q }}" placeholder="Name"
+               class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+    </div>
+    <button type="submit" class="px-4 py-2 rounded bg-slate-200 text-slate-800 text-sm font-medium hover:bg-slate-300">Filter</button>
+</form>
+
+<div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-left text-slate-500">
+            <tr>
+                <th class="px-4 py-3">Name</th>
+                <th class="px-4 py-3">Parent</th>
+                <th class="px-4 py-3"></th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+            {% for category in categories %}
+            <tr>
+                <td class="px-4 py-3 font-medium text-slate-900">{{ category.name }}</td>
+                <td class="px-4 py-3">{{ category.parent|default:"—" }}</td>
+                <td class="px-4 py-3 text-right">
+                    <a href="{% url 'masters:category_update' category.pk %}" class="text-slate-600 hover:text-slate-900">Edit</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="px-4 py-8 text-center text-slate-400">No categories found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% include "partials/_pagination.html" %}
+{% endblock %}

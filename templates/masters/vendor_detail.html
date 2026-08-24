@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}{{ vendor.name }} &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-semibold text-slate-900">{{ vendor.code }} — {{ vendor.name }}</h1>
+    <a href="{% url 'masters:vendor_update' vendor.pk %}" class="px-4 py-2 rounded border border-slate-300 text-sm font-medium hover:bg-slate-50">Edit</a>
+</div>
+
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <dl class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+        <div><dt class="text-slate-500">Status</dt><dd class="font-medium">{{ vendor.get_status_display }}</dd></div>
+        <div><dt class="text-slate-500">GSTIN</dt><dd class="font-medium">{{ vendor.gstin|default:"—" }}</dd></div>
+        <div><dt class="text-slate-500">PAN</dt><dd class="font-medium">{{ vendor.pan|default:"—" }}</dd></div>
+        <div><dt class="text-slate-500">State</dt><dd class="font-medium">{{ vendor.get_state_display|default:"—" }}</dd></div>
+        <div><dt class="text-slate-500">Payment terms</dt><dd class="font-medium">{{ vendor.payment_terms_days }} days</dd></div>
+        <div><dt class="text-slate-500">Contact</dt><dd class="font-medium">{{ vendor.contact_person|default:"—" }}</dd></div>
+        <div><dt class="text-slate-500">Phone</dt><dd class="font-medium">{{ vendor.phone|default:"—" }}</dd></div>
+        <div><dt class="text-slate-500">Email</dt><dd class="font-medium">{{ vendor.email|default:"—" }}</dd></div>
+        <div><dt class="text-slate-500">Tally ledger</dt><dd class="font-medium">{{ vendor.tally_ledger_name|default:"—" }}</dd></div>
+        <div class="sm:col-span-3"><dt class="text-slate-500">Address</dt><dd class="font-medium">{{ vendor.address|default:"—"|linebreaksbr }}</dd></div>
+        <div class="sm:col-span-3">
+            <dt class="text-slate-500">Categories</dt>
+            <dd class="font-medium">
+                {% for c in vendor.categories.all %}{{ c.name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}
+            </dd>
+        </div>
+    </dl>
+</div>
+
+<div class="bg-white rounded-lg shadow p-6">
+    <h2 class="text-sm font-semibold text-slate-900 mb-3">Documents</h2>
+
+    <ul class="divide-y divide-slate-100 mb-4">
+        {% for doc in vendor.documents.all %}
+        <li class="py-2 flex items-center justify-between text-sm">
+            <a href="{{ doc.file.url }}" target="_blank" class="text-slate-700 hover:underline">{{ doc.label }}</a>
+            <form method="post" action="{% url 'masters:vendor_document_delete' vendor.pk doc.pk %}"
+                  onsubmit="return confirm('Remove document &quot;{{ doc.label }}&quot;?');">
+                {% csrf_token %}
+                <button type="submit" class="text-red-600 hover:text-red-800 text-xs">Remove</button>
+            </form>
+        </li>
+        {% empty %}
+        <li class="py-2 text-sm text-slate-400">No documents yet.</li>
+        {% endfor %}
+    </ul>
+
+    <form method="post" action="{% url 'masters:vendor_document_create' vendor.pk %}" enctype="multipart/form-data" class="flex flex-wrap gap-2 items-end">
+        {% csrf_token %}
+        <div class="flex-1 min-w-[160px]">
+            <label class="block text-xs font-medium text-slate-500">Label</label>
+            {{ document_form.label }}
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-500">File</label>
+            {{ document_form.file }}
+        </div>
+        <button type="submit" class="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 whitespace-nowrap">Upload</button>
+    </form>
+</div>
+{% endblock %}

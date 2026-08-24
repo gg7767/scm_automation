@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ item.name }} &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-semibold text-slate-900">{{ item.code }} — {{ item.name }}</h1>
+    <a href="{% url 'masters:item_update' item.pk %}" class="px-4 py-2 rounded border border-slate-300 text-sm font-medium hover:bg-slate-50">Edit</a>
+</div>
+
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <dl class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+        <div><dt class="text-slate-500">Category</dt><dd class="font-medium">{{ item.category.name }}</dd></div>
+        <div><dt class="text-slate-500">Unit</dt><dd class="font-medium">{{ item.get_unit_display }}</dd></div>
+        <div><dt class="text-slate-500">GST rate</dt><dd class="font-medium">{{ item.gst_rate }}%</dd></div>
+        <div><dt class="text-slate-500">HSN code</dt><dd class="font-medium">{{ item.hsn_code|default:"—" }}</dd></div>
+        <div><dt class="text-slate-500">Status</dt><dd class="font-medium">{{ item.active|yesno:"Active,Inactive" }}</dd></div>
+    </dl>
+</div>
+
+<div class="bg-white rounded-lg shadow p-6">
+    <h2 class="text-sm font-semibold text-slate-900 mb-3">Aliases</h2>
+    <p class="text-xs text-slate-500 mb-3">Legacy Excel names mapped to this canonical item during import.</p>
+
+    <ul class="divide-y divide-slate-100 mb-4">
+        {% for alias in item.aliases.all %}
+        <li class="py-2 flex items-center justify-between text-sm">
+            <span>{{ alias.alias_name }}</span>
+            <form method="post" action="{% url 'masters:item_alias_delete' item.pk alias.pk %}"
+                  onsubmit="return confirm('Remove alias &quot;{{ alias.alias_name }}&quot;?');">
+                {% csrf_token %}
+                <button type="submit" class="text-red-600 hover:text-red-800 text-xs">Remove</button>
+            </form>
+        </li>
+        {% empty %}
+        <li class="py-2 text-sm text-slate-400">No aliases yet.</li>
+        {% endfor %}
+    </ul>
+
+    <form method="post" action="{% url 'masters:item_alias_create' item.pk %}" class="flex gap-2">
+        {% csrf_token %}
+        {{ alias_form.alias_name }}
+        <button type="submit" class="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 whitespace-nowrap">Add alias</button>
+    </form>
+</div>
+{% endblock %}

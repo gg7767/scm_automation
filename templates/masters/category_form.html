@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{% if object %}Edit category{% else %}New category{% endif %} &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="max-w-lg mx-auto bg-white rounded-lg shadow p-6">
+    <h1 class="text-lg font-semibold text-slate-900 mb-4">
+        {% if object %}Edit category{% else %}New category{% endif %}
+    </h1>
+    {% if form.non_field_errors %}
+    <div class="mb-4 px-3 py-2 rounded bg-red-50 border border-red-300 text-red-800 text-sm">
+        {{ form.non_field_errors }}
+    </div>
+    {% endif %}
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        {% for field in form %}
+        <div>
+            <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<p class="mt-1 text-xs text-slate-500">{{ field.help_text }}</p>{% endif %}
+            {% for error in field.errors %}<p class="mt-1 text-xs text-red-600">{{ error }}</p>{% endfor %}
+        </div>
+        {% endfor %}
+        <div class="flex gap-3 pt-2">
+            <button type="submit" class="px-4 py-3 rounded bg-slate-900 text-white font-medium hover:bg-slate-800">Save</button>
+            <a href="{% url 'masters:category_list' %}" class="px-4 py-3 rounded border border-slate-300 text-slate-700 hover:bg-slate-50">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Items &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-semibold text-slate-900">Items</h1>
+    <a href="{% url 'masters:item_create' %}" class="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800">+ New item</a>
+</div>
+
+<form method="get" class="bg-white rounded-lg shadow p-4 mb-4 flex flex-wrap gap-3 items-end">
+    <div class="flex-1 min-w-[180px]">
+        <label class="block text-xs font-medium text-slate-500">Search</label>
+        <input type="text" name="q" value="{{ q }}" placeholder="Name, code, HSN, or alias"
+               class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+    </div>
+    <div>
+        <label class="block text-xs font-medium text-slate-500">Category</label>
+        <select name="category" class="mt-1 rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+            <option value="">All</option>
+            {% for c in categories %}
+            <option value="{{ c.pk }}" {% if category == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="block text-xs font-medium text-slate-500">Status</label>
+        <select name="status" class="mt-1 rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+            <option value="" {% if not status %}selected{% endif %}>All</option>
+            <option value="active" {% if status == "active" %}selected{% endif %}>Active</option>
+            <option value="inactive" {% if status == "inactive" %}selected{% endif %}>Inactive</option>
+        </select>
+    </div>
+    <button type="submit" class="px-4 py-2 rounded bg-slate-200 text-slate-800 text-sm font-medium hover:bg-slate-300">Filter</button>
+</form>
+
+<div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-left text-slate-500">
+            <tr>
+                <th class="px-4 py-3">Code</th>
+                <th class="px-4 py-3">Name</th>
+                <th class="px-4 py-3">Category</th>
+                <th class="px-4 py-3">Unit</th>
+                <th class="px-4 py-3">GST %</th>
+                <th class="px-4 py-3">Status</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+            {% for item in items %}
+            <tr class="hover:bg-slate-50 cursor-pointer" onclick="window.location='{% url 'masters:item_detail' item.pk %}'">
+                <td class="px-4 py-3 font-medium text-slate-900">{{ item.code }}</td>
+                <td class="px-4 py-3">{{ item.name }}</td>
+                <td class="px-4 py-3">{{ item.category.name }}</td>
+                <td class="px-4 py-3">{{ item.get_unit_display }}</td>
+                <td class="px-4 py-3">{{ item.gst_rate }}</td>
+                <td class="px-4 py-3">
+                    {% if item.active %}
+                    <span class="px-2 py-1 rounded bg-green-50 text-green-700 text-xs">Active</span>
+                    {% else %}
+                    <span class="px-2 py-1 rounded bg-slate-100 text-slate-500 text-xs">Inactive</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">No items found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% include "partials/_pagination.html" %}
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Vendors &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-semibold text-slate-900">Vendors</h1>
+    <a href="{% url 'masters:vendor_create' %}" class="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800">+ New vendor</a>
+</div>
+
+<form method="get" class="bg-white rounded-lg shadow p-4 mb-4 flex flex-wrap gap-3 items-end">
+    <div class="flex-1 min-w-[180px]">
+        <label class="block text-xs font-medium text-slate-500">Search</label>
+        <input type="text" name="q" value="{{ q }}" placeholder="Name, code, GSTIN, or PAN"
+               class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+    </div>
+    <div>
+        <label class="block text-xs font-medium text-slate-500">Status</label>
+        <select name="status" class="mt-1 rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+            <option value="" {% if not status %}selected{% endif %}>All</option>
+            {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit" class="px-4 py-2 rounded bg-slate-200 text-slate-800 text-sm font-medium hover:bg-slate-300">Filter</button>
+</form>
+
+<div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-left text-slate-500">
+            <tr>
+                <th class="px-4 py-3">Code</th>
+                <th class="px-4 py-3">Name</th>
+                <th class="px-4 py-3">State</th>
+                <th class="px-4 py-3">Payment terms</th>
+                <th class="px-4 py-3">Status</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+            {% for vendor in vendors %}
+            <tr class="hover:bg-slate-50 cursor-pointer" onclick="window.location='{% url 'masters:vendor_detail' vendor.pk %}'">
+                <td class="px-4 py-3 font-medium text-slate-900">{{ vendor.code }}</td>
+                <td class="px-4 py-3">{{ vendor.name }}</td>
+                <td class="px-4 py-3">{{ vendor.get_state_display|default:"—" }}</td>
+                <td class="px-4 py-3">{{ vendor.payment_terms_days }} days</td>
+                <td class="px-4 py-3">
+                    {% if vendor.status == "active" %}
+                    <span class="px-2 py-1 rounded bg-green-50 text-green-700 text-xs">Active</span>
+                    {% elif vendor.status == "on_hold" %}
+                    <span class="px-2 py-1 rounded bg-amber-50 text-amber-700 text-xs">On hold</span>
+                    {% else %}
+                    <span class="px-2 py-1 rounded bg-red-50 text-red-700 text-xs">Blacklisted</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">No vendors found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% include "partials/_pagination.html" %}
+{% endblock %}

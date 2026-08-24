@@ -3,7 +3,8 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 
-from accounts_stub.management.commands.seed_demo import ROLE_GROUPS
+from accounts_stub.management.commands.seed_demo import DEMO_CATEGORIES, ROLE_GROUPS
+from masters.models import ItemCategory, Site
 
 
 class SeedDemoTests(TestCase):
@@ -12,10 +13,18 @@ class SeedDemoTests(TestCase):
         group_names = set(Group.objects.values_list("name", flat=True))
         self.assertEqual(group_names, set(ROLE_GROUPS))
 
+    def test_creates_demo_categories_and_site(self):
+        call_command("seed_demo")
+        category_names = set(ItemCategory.objects.values_list("name", flat=True))
+        self.assertEqual(category_names, set(DEMO_CATEGORIES))
+        self.assertTrue(Site.objects.filter(code="HYD-F1").exists())
+
     def test_idempotent(self):
         call_command("seed_demo")
         call_command("seed_demo")
         self.assertEqual(Group.objects.count(), len(ROLE_GROUPS))
+        self.assertEqual(ItemCategory.objects.count(), len(DEMO_CATEGORIES))
+        self.assertEqual(Site.objects.count(), 1)
 
 
 class AuthAndHomeViewTests(TestCase):

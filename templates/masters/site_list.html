@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Sites &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-semibold text-slate-900">Sites</h1>
+    <a href="{% url 'masters:site_create' %}" class="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800">+ New site</a>
+</div>
+
+<form method="get" class="bg-white rounded-lg shadow p-4 mb-4 flex flex-wrap gap-3 items-end">
+    <div class="flex-1 min-w-[180px]">
+        <label class="block text-xs font-medium text-slate-500">Search</label>
+        <input type="text" name="q" value="{{ q }}" placeholder="Name or code"
+               class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+    </div>
+    <div>
+        <label class="block text-xs font-medium text-slate-500">Status</label>
+        <select name="status" class="mt-1 rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+            <option value="" {% if not status %}selected{% endif %}>All</option>
+            <option value="active" {% if status == "active" %}selected{% endif %}>Active</option>
+            <option value="inactive" {% if status == "inactive" %}selected{% endif %}>Inactive</option>
+        </select>
+    </div>
+    <button type="submit" class="px-4 py-2 rounded bg-slate-200 text-slate-800 text-sm font-medium hover:bg-slate-300">Filter</button>
+</form>
+
+<div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-left text-slate-500">
+            <tr>
+                <th class="px-4 py-3">Code</th>
+                <th class="px-4 py-3">Name</th>
+                <th class="px-4 py-3">Factory</th>
+                <th class="px-4 py-3">Status</th>
+                <th class="px-4 py-3"></th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+            {% for site in sites %}
+            <tr>
+                <td class="px-4 py-3 font-medium text-slate-900">{{ site.code }}</td>
+                <td class="px-4 py-3">{{ site.name }}</td>
+                <td class="px-4 py-3">{{ site.is_factory|yesno:"Yes,No" }}</td>
+                <td class="px-4 py-3">
+                    {% if site.active %}
+                    <span class="px-2 py-1 rounded bg-green-50 text-green-700 text-xs">Active</span>
+                    {% else %}
+                    <span class="px-2 py-1 rounded bg-slate-100 text-slate-500 text-xs">Inactive</span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right">
+                    <a href="{% url 'masters:site_update' site.pk %}" class="text-slate-600 hover:text-slate-900">Edit</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">No sites found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% include "partials/_pagination.html" %}
+{% endblock %}
