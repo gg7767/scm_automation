@@ -3,7 +3,12 @@
 {% block content %}
 <div class="flex items-center justify-between mb-4">
     <h1 class="text-xl font-semibold text-slate-900">{{ vendor.code }} — {{ vendor.name }}</h1>
-    <a href="{% url 'masters:vendor_update' vendor.pk %}" class="px-4 py-2 rounded border border-slate-300 text-sm font-medium hover:bg-slate-50">Edit</a>
+    <div class="flex gap-2">
+        {% if can_view_po %}
+        <a href="{% url 'purchase:vendor_ledger' vendor.pk %}" class="px-4 py-2 rounded border border-slate-300 text-sm font-medium hover:bg-slate-50">PO ledger</a>
+        {% endif %}
+        <a href="{% url 'masters:vendor_update' vendor.pk %}" class="px-4 py-2 rounded border border-slate-300 text-sm font-medium hover:bg-slate-50">Edit</a>
+    </div>
 </div>
 
 <div class="bg-white rounded-lg shadow p-6 mb-6">

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ vendor.name }} ledger &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-semibold text-slate-900">{{ vendor.code }} — {{ vendor.name }} (PO ledger)</h1>
+    <a href="{% url 'masters:vendor_detail' vendor.pk %}" class="px-4 py-2 rounded border border-slate-300 text-sm font-medium hover:bg-slate-50">Vendor details</a>
+</div>
+
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <dl class="text-sm">
+        <dt class="text-slate-500">Total open PO value</dt>
+        <dd class="text-2xl font-semibold text-slate-900">₹{{ open_value }}</dd>
+        <p class="text-xs text-slate-500 mt-1">Sum of grand totals for POs not yet closed or cancelled.</p>
+    </dl>
+</div>
+
+<div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-left text-slate-500">
+            <tr>
+                <th class="px-4 py-3">PO Number</th>
+                <th class="px-4 py-3">Site</th>
+                <th class="px-4 py-3">Grand total</th>
+                <th class="px-4 py-3">Status</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+            {% for po in purchase_orders %}
+            <tr class="hover:bg-slate-50 cursor-pointer" onclick="window.location='{% url 'purchase:po_detail' po.pk %}'">
+                <td class="px-4 py-3 font-medium text-slate-900">{{ po.po_number }}</td>
+                <td class="px-4 py-3">{{ po.site.code }}</td>
+                <td class="px-4 py-3">₹{{ po.grand_total }}</td>
+                <td class="px-4 py-3">{% include "purchase/_status_badge.html" with status=po.status %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="px-4 py-8 text-center text-slate-400">No purchase orders for this vendor yet.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

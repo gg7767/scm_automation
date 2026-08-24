@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{% if object %}Edit {{ object.po_number }}{% else %}New Purchase Order{% endif %} &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="max-w-xl mx-auto bg-white rounded-lg shadow p-6">
+    <h1 class="text-lg font-semibold text-slate-900 mb-4">
+        {% if object %}Edit {{ object.po_number }}{% else %}New Purchase Order{% endif %}
+    </h1>
+
+    {% if object %}
+    <p class="text-sm text-slate-500 mb-4">Vendor: <strong>{{ object.vendor.name }}</strong> &middot; Site: <strong>{{ object.site.code }}</strong> (fixed after creation)</p>
+    {% endif %}
+
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        {% for field in form %}
+        <div>
+            <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<p class="mt-1 text-xs text-slate-500">{{ field.help_text }}</p>{% endif %}
+            {% for error in field.errors %}<p class="mt-1 text-xs text-red-600">{{ error }}</p>{% endfor %}
+        </div>
+        {% endfor %}
+        <div class="flex gap-3 pt-2">
+            <button type="submit" class="px-4 py-3 rounded bg-slate-900 text-white font-medium hover:bg-slate-800">Save</button>
+            <a href="{% if object %}{% url 'purchase:po_detail' object.pk %}{% else %}{% url 'purchase:po_list' %}{% endif %}" class="px-4 py-3 rounded border border-slate-300 text-slate-700 hover:bg-slate-50">Cancel</a>
+        </div>
+    </form>
+</div>
+
+{% if not object %}
+<script>
+    (function () {
+        var termsMap = {{ vendor_terms_map|default:"{}"|safe }};
+        var vendorSelect = document.getElementById('id_vendor');
+        var termsInput = document.getElementById('id_payment_terms_days');
+        if (vendorSelect && termsInput) {
+            vendorSelect.addEventListener('change', function () {
+                var terms = termsMap[this.value];
+                if (terms !== undefined) {
+                    termsInput.value = terms;
+                }
+            });
+        }
+    })();
+</script>
+{% endif %}
+{% endblock %}

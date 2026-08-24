@@ -1,12 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Home &mdash; SCM Automation{% endblock %}
 {% block content %}
-<div class="bg-white rounded-lg shadow p-6">
+<div class="bg-white rounded-lg shadow p-6 mb-6">
     <h1 class="text-xl font-semibold text-slate-900">Welcome, {{ user.get_full_name|default:user.username }}</h1>
-    <p class="mt-2 text-sm text-slate-600">
-        You are logged in to the SCM Automation Phase 1 scaffold.
-    </p>
-
     <dl class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
         <div class="border rounded p-4">
             <dt class="text-slate-500">Groups</dt>
@@ -19,13 +15,69 @@
             </dd>
         </div>
         <div class="border rounded p-4">
-            <dt class="text-slate-500">Superuser</dt>
-            <dd class="mt-1 font-medium text-slate-900">{{ user.is_superuser|yesno:"Yes,No" }}</dd>
+            <dt class="text-slate-500">Site</dt>
+            <dd class="mt-1 font-medium text-slate-900">{{ user.profile.site|default:"—" }}</dd>
         </div>
     </dl>
-
-    <p class="mt-6 text-xs text-slate-400">
-        Masters, purchase orders, and the pending-approvals dashboard land in later build steps.
-    </p>
 </div>
+
+{% if show_dashboard %}
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-xs text-slate-500">POs this month</div>
+        <div class="text-2xl font-semibold text-slate-900">{{ month_stats.count }}</div>
+        <div class="text-xs text-slate-500">₹{{ month_stats.total_value }} total value</div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-xs text-slate-500">Pending your approval</div>
+        <div class="text-2xl font-semibold text-slate-900">{{ pending_approvals|length }}</div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-xs text-slate-500">Past expected delivery</div>
+        <div class="text-2xl font-semibold text-slate-900">{{ overdue_pos.count }}</div>
+    </div>
+</div>
+
+{% if pending_approvals %}
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <h2 class="text-sm font-semibold text-slate-900 mb-3">Pending your approval</h2>
+    <ul class="divide-y divide-slate-100 text-sm">
+        {% for po in pending_approvals %}
+        <li class="py-2 flex items-center justify-between">
+            <a href="{% url 'purchase:po_detail' po.pk %}" class="text-slate-900 hover:underline">{{ po.po_number }} — {{ po.vendor.name }}</a>
+            <span class="text-slate-500">₹{{ po.grand_total }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% if overdue_pos %}
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <h2 class="text-sm font-semibold text-slate-900 mb-3">Past expected delivery</h2>
+    <ul class="divide-y divide-slate-100 text-sm">
+        {% for po in overdue_pos %}
+        <li class="py-2 flex items-center justify-between">
+            <a href="{% url 'purchase:po_detail' po.pk %}" class="text-slate-900 hover:underline">{{ po.po_number }} — {{ po.vendor.name }}</a>
+            <span class="text-red-600">expected {{ po.expected_delivery_date|date:"d-m-Y" }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<div class="bg-white rounded-lg shadow p-6">
+    <h2 class="text-sm font-semibold text-slate-900 mb-3">Recent purchase orders</h2>
+    <ul class="divide-y divide-slate-100 text-sm">
+        {% for po in recent_pos %}
+        <li class="py-2 flex items-center justify-between">
+            <a href="{% url 'purchase:po_detail' po.pk %}" class="text-slate-900 hover:underline">{{ po.po_number }} — {{ po.vendor.name }}</a>
+            <span class="text-slate-500">{% include "purchase/_status_badge.html" with status=po.status %}</span>
+        </li>
+        {% empty %}
+        <li class="py-2 text-slate-400">No purchase orders yet.</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
 {% endblock %}

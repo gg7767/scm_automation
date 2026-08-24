@@ -3,9 +3,11 @@ from decimal import Decimal
 
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
+from django.urls import reverse
 
+from accounts_stub.models import UserProfile
 from masters.models import Item, ItemCategory, RateContract, Site, Vendor
-from purchase.models import ApprovalRule, InvalidStatusTransition, PurchaseOrder, PurchaseOrderLine
+from purchase.models import ApprovalRule, InvalidStatusTransition, POAttachment, PurchaseOrder, PurchaseOrderLine
 from purchase.numbering import financial_year_label
 
 
@@ -244,3 +246,262 @@ class ApprovalRuleEngineTests(TestCase):
     def test_superuser_can_always_approve(self):
         user = User.objects.create_superuser(username="admin", password="pass12345")
         self.assertTrue(ApprovalRule.can_user_approve(user, Decimal("5000000.00")))
+
+
+# --- Views --------------------------------------------------------------
+
+class POListViewPermissionTests(TestCase):
+    def setUp(self):
+        self.site1 = Site.objects.create(name="Hyderabad Factory 1", code="HYD-F1")
+        self.site2 = Site.objects.create(name="Chennai Factory", code="CHN-F1")
+        self.vendor = Vendor.objects.create(name="ABC Traders")
+        self.po1 = PurchaseOrder.objects.create(vendor=self.vendor, site=self.site1)
+        self.po2 = PurchaseOrder.objects.create(vendor=self.vendor, site=self.site2)
+
+        self.po_officer = User.objects.create_user(username="po", password="pass12345")
+        self.po_officer.groups.add(Group.objects.create(name="Purchase Officer (HO)"))
+
+        self.site_member = User.objects.create_user(username="siteuser", password="pass12345")
+        self.site_member.groups.add(Group.objects.create(name="Site Member"))
+        self.site_member.profile.site = self.site1
+        self.site_member.profile.save()
+
+        self.accounts_user = User.objects.create_user(username="accountant", password="pass12345")
+        self.accounts_user.groups.add(Group.objects.create(name="Accounts"))
+
+    def test_purchase_officer_sees_all_sites(self):
+        self.client.login(username="po", password="pass12345")
+        response = self.client.get(reverse("purchase:po_list"))
+        self.assertContains(response, self.po1.po_number)
+        self.assertContains(response, self.po2.po_number)
+
+    def test_site_member_sees_only_own_site(self):
+        self.client.login(username="siteuser", password="pass12345")
+        response = self.client.get(reverse("purchase:po_list"))
+        self.assertContains(response, self.po1.po_number)
+        self.assertNotContains(response, self.po2.po_number)
+
+    def test_site_member_without_site_sees_nothing(self):
+        unassigned = User.objects.create_user(username="nosite", password="pass12345")
+        unassigned.groups.add(Group.objects.get(name="Site Member"))
+        self.client.login(username="nosite", password="pass12345")
+        response = self.client.get(reverse("purchase:po_list"))
+        self.assertNotContains(response, self.po1.po_number)
+        self.assertNotContains(response, self.po2.po_number)
+
+    def test_accounts_role_has_read_only_access(self):
+        self.client.login(username="accountant", password="pass12345")
+        response = self.client.get(reverse("purchase:po_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "+ New PO")
+
+    def test_anonymous_redirected_to_login(self):
+        response = self.client.get(reverse("purchase:po_list"))
+        self.assertEqual(response.status_code, 302)
+
+    def test_site_member_cannot_view_other_site_po_detail(self):
+        self.client.login(username="siteuser", password="pass12345")
+        response = self.client.get(reverse("purchase:po_detail", args=[self.po2.pk]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_site_member_cannot_create_po(self):
+        self.client.login(username="siteuser", password="pass12345")
+        response = self.client.get(reverse("purchase:po_create"))
+        self.assertEqual(response.status_code, 403)
+
+
+class POCreateAndLineManagementViewTests(TestCase):
+    def setUp(self):
+        self.site = Site.objects.create(name="Hyderabad Factory 1", code="HYD-F1")
+        self.vendor = Vendor.objects.create(name="ABC Traders", payment_terms_days=45)
+        self.category = ItemCategory.objects.create(name="Cement")
+        self.item = Item.objects.create(name="OPC 53", category=self.category, unit=Item.Unit.BAG, gst_rate=Decimal("28.00"))
+        self.user = User.objects.create_user(username="po", password="pass12345")
+        self.user.groups.add(Group.objects.create(name="Purchase Officer (HO)"))
+        self.client.login(username="po", password="pass12345")
+
+    def test_create_po(self):
+        response = self.client.post(reverse("purchase:po_create"), {
+            "vendor": self.vendor.pk, "site": self.site.pk, "project_name": "",
+            "payment_terms_days": 45, "delivery_terms": "", "remarks": "", "expected_delivery_date": "",
+        })
+        po = PurchaseOrder.objects.get(vendor=self.vendor)
+        self.assertRedirects(response, reverse("purchase:po_detail", args=[po.pk]))
+        self.assertEqual(po.created_by, self.user)
+        self.assertTrue(po.po_number.startswith("PO/HYD-F1/"))
+
+    def test_add_line_via_htmx_endpoint(self):
+        po = PurchaseOrder.objects.create(vendor=self.vendor, site=self.site)
+        response = self.client.post(reverse("purchase:po_line_create", args=[po.pk]), {
+            "item": self.item.pk, "description_override": "", "quantity": "10", "rate": "380.00", "gst_rate": "",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(po.lines.count(), 1)
+        self.assertContains(response, "3800.00")
+
+    def test_cannot_add_line_after_po_is_no_longer_draft(self):
+        po = PurchaseOrder.objects.create(vendor=self.vendor, site=self.site)
+        PurchaseOrderLine.objects.create(po=po, item=self.item, quantity=Decimal("1"), rate=Decimal("10"))
+        po.submit_for_approval(self.user)
+        self.client.post(reverse("purchase:po_line_create", args=[po.pk]), {
+            "item": self.item.pk, "description_override": "", "quantity": "5", "rate": "10.00", "gst_rate": "",
+        })
+        self.assertEqual(po.lines.count(), 1)
+
+    def test_delete_line(self):
+        po = PurchaseOrder.objects.create(vendor=self.vendor, site=self.site)
+        line = PurchaseOrderLine.objects.create(po=po, item=self.item, quantity=Decimal("1"), rate=Decimal("10"))
+        self.client.post(reverse("purchase:po_line_delete", args=[po.pk, line.pk]))
+        self.assertEqual(po.lines.count(), 0)
+
+    def test_item_search_returns_matches(self):
+        response = self.client.get(reverse("purchase:item_search"), {"q": "OPC"})
+        self.assertContains(response, "OPC 53")
+
+    def test_item_search_includes_contract_rate(self):
+        RateContract.objects.create(
+            vendor=self.vendor, item=self.item, rate=Decimal("380.00"), valid_from=datetime.date(2020, 1, 1)
+        )
+        response = self.client.get(reverse("purchase:item_search"), {"q": "OPC", "vendor": self.vendor.pk})
+        self.assertContains(response, "380.00")
+
+
+class POStatusTransitionViewTests(TestCase):
+    def setUp(self):
+        self.site = Site.objects.create(name="Hyderabad Factory 1", code="HYD-F1")
+        self.vendor = Vendor.objects.create(name="ABC Traders")
+        self.category = ItemCategory.objects.create(name="Cement")
+        self.item = Item.objects.create(name="OPC 53", category=self.category, unit=Item.Unit.BAG)
+
+        po_group = Group.objects.create(name="Purchase Officer (HO)")
+        ApprovalRule.objects.create(min_amount=Decimal("0"), max_amount=None, approver_role=po_group)
+
+        self.officer = User.objects.create_user(username="po", password="pass12345")
+        self.officer.groups.add(po_group)
+        self.client.login(username="po", password="pass12345")
+
+        self.po = PurchaseOrder.objects.create(vendor=self.vendor, site=self.site)
+        PurchaseOrderLine.objects.create(po=self.po, item=self.item, quantity=Decimal("1"), rate=Decimal("100"))
+
+    def test_full_lifecycle_via_views(self):
+        self.client.post(reverse("purchase:po_submit", args=[self.po.pk]))
+        self.po.refresh_from_db()
+        self.assertEqual(self.po.status, PurchaseOrder.Status.PENDING_APPROVAL)
+
+        self.client.post(reverse("purchase:po_approve", args=[self.po.pk]), {"text": "ok"})
+        self.po.refresh_from_db()
+        self.assertEqual(self.po.status, PurchaseOrder.Status.APPROVED)
+
+        self.client.post(reverse("purchase:po_send", args=[self.po.pk]), {"channel": "email"})
+        self.po.refresh_from_db()
+        self.assertEqual(self.po.status, PurchaseOrder.Status.SENT)
+
+        self.client.post(reverse("purchase:po_amend", args=[self.po.pk]))
+        self.po.refresh_from_db()
+        self.assertEqual(self.po.status, PurchaseOrder.Status.DRAFT)
+        self.assertEqual(self.po.revision_number, 1)
+
+    def test_reject_via_view(self):
+        self.client.post(reverse("purchase:po_submit", args=[self.po.pk]))
+        self.client.post(reverse("purchase:po_reject", args=[self.po.pk]), {"text": "wrong vendor"})
+        self.po.refresh_from_db()
+        self.assertEqual(self.po.status, PurchaseOrder.Status.DRAFT)
+
+    def test_cancel_via_view_requires_reason(self):
+        response = self.client.post(reverse("purchase:po_cancel", args=[self.po.pk]), {"text": ""})
+        self.po.refresh_from_db()
+        self.assertEqual(self.po.status, PurchaseOrder.Status.DRAFT)
+
+    def test_cancel_via_view_with_reason(self):
+        self.client.post(reverse("purchase:po_cancel", args=[self.po.pk]), {"text": "project shelved"})
+        self.po.refresh_from_db()
+        self.assertEqual(self.po.status, PurchaseOrder.Status.CANCELLED)
+
+    def test_user_below_approval_threshold_cannot_approve(self):
+        scm_head = Group.objects.create(name="SCM Head")
+        ApprovalRule.objects.all().delete()
+        ApprovalRule.objects.create(min_amount=Decimal("1000000"), max_amount=None, approver_role=scm_head)
+        self.client.post(reverse("purchase:po_submit", args=[self.po.pk]))
+        response = self.client.post(reverse("purchase:po_approve", args=[self.po.pk]), {"text": ""})
+        self.assertEqual(response.status_code, 403)
+
+
+class POPdfViewTests(TestCase):
+    def setUp(self):
+        self.site = Site.objects.create(name="Hyderabad Factory 1", code="HYD-F1")
+        self.vendor = Vendor.objects.create(name="ABC Traders", state="TG")
+        self.category = ItemCategory.objects.create(name="Cement")
+        self.item = Item.objects.create(name="OPC 53", category=self.category, unit=Item.Unit.BAG, gst_rate=Decimal("18.00"))
+        self.user = User.objects.create_user(username="po", password="pass12345")
+        self.user.groups.add(Group.objects.create(name="Purchase Officer (HO)"))
+        self.client.login(username="po", password="pass12345")
+        self.po = PurchaseOrder.objects.create(vendor=self.vendor, site=self.site)
+        PurchaseOrderLine.objects.create(po=self.po, item=self.item, quantity=Decimal("10"), rate=Decimal("100"))
+
+    def test_pdf_renders(self):
+        response = self.client.get(reverse("purchase:po_pdf", args=[self.po.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertTrue(response.content.startswith(b"%PDF"))
+
+
+class VendorLedgerViewTests(TestCase):
+    def setUp(self):
+        self.site = Site.objects.create(name="Hyderabad Factory 1", code="HYD-F1")
+        self.vendor = Vendor.objects.create(name="ABC Traders")
+        self.user = User.objects.create_user(username="po", password="pass12345")
+        self.user.groups.add(Group.objects.create(name="Purchase Officer (HO)"))
+        self.client.login(username="po", password="pass12345")
+
+    def test_open_value_excludes_closed_and_cancelled(self):
+        po1 = PurchaseOrder.objects.create(vendor=self.vendor, site=self.site)
+        po1.subtotal = po1.gst_amount = Decimal("0")
+        po1.grand_total = Decimal("1000.00")
+        po1.save()
+        po2 = PurchaseOrder.objects.create(vendor=self.vendor, site=self.site)
+        po2.grand_total = Decimal("500.00")
+        po2.status = PurchaseOrder.Status.CANCELLED
+        po2.save()
+
+        response = self.client.get(reverse("purchase:vendor_ledger", args=[self.vendor.pk]))
+        self.assertContains(response, "1000.00")
+        self.assertContains(response, po1.po_number)
+        self.assertContains(response, po2.po_number)
+
+
+class POAttachmentViewTests(TestCase):
+    def setUp(self):
+        self.site = Site.objects.create(name="Hyderabad Factory 1", code="HYD-F1")
+        self.vendor = Vendor.objects.create(name="ABC Traders")
+        self.user = User.objects.create_user(username="po", password="pass12345")
+        self.user.groups.add(Group.objects.create(name="Purchase Officer (HO)"))
+        self.client.login(username="po", password="pass12345")
+        self.po = PurchaseOrder.objects.create(vendor=self.vendor, site=self.site)
+
+    def test_upload_and_delete_attachment(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        response = self.client.post(reverse("purchase:po_attachment_create", args=[self.po.pk]), {
+            "label": "Vendor quotation",
+            "file": SimpleUploadedFile("quote.pdf", b"dummy"),
+        })
+        self.assertRedirects(response, reverse("purchase:po_detail", args=[self.po.pk]))
+        attachment = POAttachment.objects.get(po=self.po)
+
+        response = self.client.post(reverse("purchase:po_attachment_delete", args=[self.po.pk, attachment.pk]))
+        self.assertRedirects(response, reverse("purchase:po_detail", args=[self.po.pk]))
+        self.assertFalse(POAttachment.objects.filter(pk=attachment.pk).exists())
+
+
+class HomeDashboardTests(TestCase):
+    def test_dashboard_shows_for_po_viewer(self):
+        user = User.objects.create_user(username="po", password="pass12345")
+        user.groups.add(Group.objects.create(name="Purchase Officer (HO)"))
+        self.client.login(username="po", password="pass12345")
+        response = self.client.get(reverse("home"))
+        self.assertContains(response, "POs this month")
+
+    def test_dashboard_hidden_for_users_without_po_access(self):
+        user = User.objects.create_user(username="nobody", password="pass12345")
+        self.client.login(username="nobody", password="pass12345")
+        response = self.client.get(reverse("home"))
+        self.assertNotContains(response, "POs this month")

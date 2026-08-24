@@ -1,0 +1,15 @@
+{% if status == "draft" %}
+<span class="px-2 py-1 rounded bg-slate-100 text-slate-600 text-xs">Draft</span>
+{% elif status == "pending_approval" %}
+<span class="px-2 py-1 rounded bg-amber-50 text-amber-700 text-xs">Pending approval</span>
+{% elif status == "approved" %}
+<span class="px-2 py-1 rounded bg-blue-50 text-blue-700 text-xs">Approved</span>
+{% elif status == "sent" %}
+<span class="px-2 py-1 rounded bg-indigo-50 text-indigo-700 text-xs">Sent</span>
+{% elif status == "partially_delivered" %}
+<span class="px-2 py-1 rounded bg-purple-50 text-purple-700 text-xs">Partially delivered</span>
+{% elif status == "closed" %}
+<span class="px-2 py-1 rounded bg-green-50 text-green-700 text-xs">Closed</span>
+{% elif status == "cancelled" %}
+<span class="px-2 py-1 rounded bg-red-50 text-red-700 text-xs">Cancelled</span>
+{% endif %}

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Purchase Orders &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-semibold text-slate-900">Purchase Orders</h1>
+    {% if can_manage_po %}
+    <a href="{% url 'purchase:po_create' %}" class="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800">+ New PO</a>
+    {% endif %}
+</div>
+
+<form method="get" class="bg-white rounded-lg shadow p-4 mb-4 flex flex-wrap gap-3 items-end">
+    <div class="flex-1 min-w-[180px]">
+        <label class="block text-xs font-medium text-slate-500">Search</label>
+        <input type="text" name="q" value="{{ q }}" placeholder="PO number or vendor"
+               class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+    </div>
+    <div>
+        <label class="block text-xs font-medium text-slate-500">Status</label>
+        <select name="status" class="mt-1 rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+            <option value="">All</option>
+            {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="block text-xs font-medium text-slate-500">Site</label>
+        <select name="site" class="mt-1 rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+            <option value="">All</option>
+            {% for s in sites %}
+            <option value="{{ s.pk }}" {% if site == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.code }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit" class="px-4 py-2 rounded bg-slate-200 text-slate-800 text-sm font-medium hover:bg-slate-300">Filter</button>
+</form>
+
+<div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-left text-slate-500">
+            <tr>
+                <th class="px-4 py-3">PO Number</th>
+                <th class="px-4 py-3">Vendor</th>
+                <th class="px-4 py-3">Site</th>
+                <th class="px-4 py-3">Grand total</th>
+                <th class="px-4 py-3">Expected delivery</th>
+                <th class="px-4 py-3">Status</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+            {% for po in purchase_orders %}
+            <tr class="hover:bg-slate-50 cursor-pointer" onclick="window.location='{% url 'purchase:po_detail' po.pk %}'">
+                <td class="px-4 py-3 font-medium text-slate-900">{{ po.po_number }}</td>
+                <td class="px-4 py-3">{{ po.vendor.name }}</td>
+                <td class="px-4 py-3">{{ po.site.code }}</td>
+                <td class="px-4 py-3">₹{{ po.grand_total }}</td>
+                <td class="px-4 py-3">{{ po.expected_delivery_date|date:"d-m-Y"|default:"—" }}</td>
+                <td class="px-4 py-3">{% include "purchase/_status_badge.html" with status=po.status %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">No purchase orders found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% include "partials/_pagination.html" %}
+{% endblock %}

@@ -1,0 +1,106 @@
+<div id="po-lines-section">
+    <div class="overflow-x-auto mb-4">
+        <table class="w-full text-sm">
+            <thead class="text-left text-slate-500">
+                <tr>
+                    <th class="py-2 pr-3">Item</th>
+                    <th class="py-2 pr-3">Qty</th>
+                    <th class="py-2 pr-3">Unit</th>
+                    <th class="py-2 pr-3">Rate</th>
+                    <th class="py-2 pr-3">GST %</th>
+                    <th class="py-2 pr-3">Line total</th>
+                    {% if po.is_editable and can_manage_po %}<th class="py-2"></th>{% endif %}
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for line in po.lines.all %}
+                <tr>
+                    <td class="py-2 pr-3">
+                        {{ line.description }}
+                        {% if line.deviates_from_contract %}
+                        <span class="ml-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 text-xs align-middle" title="Rate differs from the active rate contract">⚠ rate deviation</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-2 pr-3">{{ line.quantity }}</td>
+                    <td class="py-2 pr-3">{{ line.get_unit_display }}</td>
+                    <td class="py-2 pr-3">₹{{ line.rate }}</td>
+                    <td class="py-2 pr-3">{{ line.gst_rate }}%</td>
+                    <td class="py-2 pr-3 font-medium">₹{{ line.line_total }}</td>
+                    {% if po.is_editable and can_manage_po %}
+                    <td class="py-2 text-right">
+                        <form method="post" action="{% url 'purchase:po_line_delete' po.pk line.pk %}"
+                              hx-post="{% url 'purchase:po_line_delete' po.pk line.pk %}"
+                              hx-target="#po-lines-section" hx-swap="outerHTML"
+                              hx-confirm="Remove this line item?">
+                            {% csrf_token %}
+                            <button type="submit" class="text-red-600 hover:text-red-800 text-xs">Remove</button>
+                        </form>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% empty %}
+                <tr><td colspan="7" class="py-4 text-slate-400">No line items yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="flex justify-end mb-4">
+        <dl class="text-sm space-y-1 w-56">
+            <div class="flex justify-between"><dt class="text-slate-500">Subtotal</dt><dd>₹{{ po.subtotal }}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-500">GST</dt><dd>₹{{ po.gst_amount }}</dd></div>
+            <div class="flex justify-between font-semibold text-slate-900 border-t pt-1"><dt>Grand total</dt><dd>₹{{ po.grand_total }}</dd></div>
+        </dl>
+    </div>
+
+    {% if po.is_editable and can_manage_po %}
+    <div class="border-t pt-4">
+        <h3 class="text-sm font-semibold text-slate-900 mb-2">Add line item</h3>
+        <div class="relative mb-2">
+            <input type="text" id="item-query" autocomplete="off" placeholder="Search item by name or code…"
+                   class="w-full rounded border-slate-300 shadow-sm px-3 py-2 text-sm"
+                   hx-get="{% url 'purchase:item_search' %}?vendor={{ po.vendor_id }}"
+                   hx-trigger="keyup changed delay:300ms"
+                   hx-target="#item-search-results"
+                   hx-include="this"
+                   name="q">
+            <div id="item-search-results" class="absolute z-10 w-full bg-white border border-slate-200 rounded shadow-lg mt-1"></div>
+        </div>
+
+        <form hx-post="{% url 'purchase:po_line_create' po.pk %}" hx-target="#po-lines-section" hx-swap="outerHTML"
+              class="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end" id="add-line-form">
+            {% csrf_token %}
+            <input type="hidden" name="item" id="id_line_item" required>
+            <div class="col-span-2 sm:col-span-1">
+                <label class="block text-xs font-medium text-slate-500">Description override</label>
+                <input type="text" name="description_override" id="id_line_description_override" class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-500">Quantity</label>
+                <input type="number" step="0.001" name="quantity" id="id_line_quantity" required class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-500">Rate</label>
+                <input type="number" step="0.01" name="rate" id="id_line_rate" required class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-500">GST % (optional)</label>
+                <input type="number" step="0.01" name="gst_rate" id="id_line_gst_rate" class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+            </div>
+            <button type="submit" class="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 whitespace-nowrap">Add line</button>
+        </form>
+        <p id="item-selected-hint" class="mt-1 text-xs text-slate-500"></p>
+    </div>
+
+    <script>
+        function selectPOItem(id, name, rate, gstRate) {
+            document.getElementById('id_line_item').value = id;
+            document.getElementById('item-query').value = name;
+            document.getElementById('item-search-results').innerHTML = '';
+            if (rate) { document.getElementById('id_line_rate').value = rate; }
+            if (gstRate) { document.getElementById('id_line_gst_rate').value = gstRate; }
+            document.getElementById('item-selected-hint').textContent = 'Selected: ' + name;
+        }
+    </script>
+    {% endif %}
+</div>

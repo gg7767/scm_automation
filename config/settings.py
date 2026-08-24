@@ -5,6 +5,8 @@ Phase 1: Vendor & Purchase Order module. See CLAUDE.md at the repo root
 for the full project brief.
 """
 
+import os
+import platform
 from pathlib import Path
 
 import environ
@@ -15,6 +17,13 @@ env = environ.Env(
     DEBUG=(bool, False),
 )
 environ.Env.read_env(BASE_DIR / ".env")
+
+if platform.system() == "Darwin":
+    # WeasyPrint (PO PDF generation) needs Homebrew's Pango/GDK-Pixbuf on
+    # Apple Silicon dev machines; dyld reads this env var at each dlopen()
+    # call, so setting it here (before weasyprint is ever imported) is
+    # enough — no need to launch the dev server with it set manually.
+    os.environ["DYLD_LIBRARY_PATH"] = "/opt/homebrew/lib:" + os.environ.get("DYLD_LIBRARY_PATH", "")
 
 
 # SECURITY WARNING: keep the secret key used in production secret!
@@ -130,3 +139,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "home"
 LOGOUT_REDIRECT_URL = "login"
+
+# Company letterhead details for PO PDFs (build step 7). COMPANY_STATE
+# drives the CGST/SGST vs IGST split by comparing it to the vendor's state.
+COMPANY_NAME = env("COMPANY_NAME", default="Precast Co. Pvt. Ltd.")
+COMPANY_ADDRESS = env("COMPANY_ADDRESS", default="Plot 1, Industrial Area, Hyderabad, Telangana")
+COMPANY_GSTIN = env("COMPANY_GSTIN", default="")
+COMPANY_STATE = env("COMPANY_STATE", default="TG")

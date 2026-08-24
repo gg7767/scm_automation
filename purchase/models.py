@@ -147,6 +147,23 @@ class PurchaseOrder(TimeStampedModel):
         self.cancelled_reason = reason
         self.save(update_fields=["status", "cancelled_by", "cancelled_at", "cancelled_reason", "updated_at"])
 
+    def amend(self, user):
+        """Reopen an approved/sent PO for editing as a new revision. Lines
+        stay editable again and re-approval + re-send are required before
+        it can go out again."""
+        if self.status not in (self.Status.APPROVED, self.Status.SENT, self.Status.PARTIALLY_DELIVERED):
+            raise InvalidStatusTransition(f"Cannot amend a PO in '{self.status}' status.")
+        self.status = self.Status.DRAFT
+        self.revision_number += 1
+        self.approved_by = None
+        self.approved_at = None
+        self.sent_at = None
+        self.sent_via = ""
+        self.save(update_fields=[
+            "status", "revision_number", "approved_by", "approved_at", "sent_at", "sent_via", "updated_at",
+        ])
+        self.approval_actions.create(action=POApprovalAction.Action.AMENDED, actor=user)
+
 
 class PurchaseOrderLine(TimeStampedModel):
     po = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name="lines")
@@ -195,6 +212,7 @@ class POApprovalAction(TimeStampedModel):
         SUBMITTED = "submitted", "Submitted"
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
+        AMENDED = "amended", "Amended"
 
     po = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name="approval_actions")
     action = models.CharField(max_length=10, choices=Action.choices)
