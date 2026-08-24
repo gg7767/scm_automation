@@ -58,4 +58,63 @@
         <button type="submit" class="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 whitespace-nowrap">Upload</button>
     </form>
 </div>
+
+<div class="bg-white rounded-lg shadow p-6 mt-6">
+    <h2 class="text-sm font-semibold text-slate-900 mb-3">Rate contracts</h2>
+    <p class="text-xs text-slate-500 mb-3">Used to auto-fill and flag deviations on PO line items.</p>
+
+    <div class="overflow-x-auto mb-4">
+        <table class="w-full text-sm">
+            <thead class="text-left text-slate-500">
+                <tr>
+                    <th class="py-1 pr-3">Item</th>
+                    <th class="py-1 pr-3">Rate</th>
+                    <th class="py-1 pr-3">Valid from</th>
+                    <th class="py-1 pr-3">Valid to</th>
+                    <th class="py-1"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for contract in vendor.rate_contracts.all %}
+                <tr>
+                    <td class="py-2 pr-3">{{ contract.item.name }}</td>
+                    <td class="py-2 pr-3">₹{{ contract.rate }}</td>
+                    <td class="py-2 pr-3">{{ contract.valid_from|date:"d-m-Y" }}</td>
+                    <td class="py-2 pr-3">{{ contract.valid_to|date:"d-m-Y"|default:"Open-ended" }}</td>
+                    <td class="py-2 text-right">
+                        <form method="post" action="{% url 'masters:rate_contract_delete' vendor.pk contract.pk %}"
+                              onsubmit="return confirm('Remove this rate contract?');">
+                            {% csrf_token %}
+                            <button type="submit" class="text-red-600 hover:text-red-800 text-xs">Remove</button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="py-2 text-slate-400">No rate contracts yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <form method="post" action="{% url 'masters:rate_contract_create' vendor.pk %}" class="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end">
+        {% csrf_token %}
+        <div class="col-span-2 sm:col-span-1">
+            <label class="block text-xs font-medium text-slate-500">Item</label>
+            {{ rate_contract_form.item }}
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-500">Rate</label>
+            {{ rate_contract_form.rate }}
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-500">Valid from</label>
+            {{ rate_contract_form.valid_from }}
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-500">Valid to</label>
+            {{ rate_contract_form.valid_to }}
+        </div>
+        <button type="submit" class="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 whitespace-nowrap">Add</button>
+    </form>
+</div>
 {% endblock %}

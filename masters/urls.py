@@ -26,4 +26,6 @@ urlpatterns = [
     path("vendors/<int:pk>/edit/", views.VendorUpdateView.as_view(), name="vendor_update"),
     path("vendors/<int:pk>/documents/add/", views.VendorDocumentCreateView.as_view(), name="vendor_document_create"),
     path("vendors/<int:pk>/documents/<int:doc_pk>/delete/", views.VendorDocumentDeleteView.as_view(), name="vendor_document_delete"),
+    path("vendors/<int:pk>/rate-contracts/add/", views.RateContractCreateView.as_view(), name="rate_contract_create"),
+    path("vendors/<int:pk>/rate-contracts/<int:contract_pk>/delete/", views.RateContractDeleteView.as_view(), name="rate_contract_delete"),
 ]

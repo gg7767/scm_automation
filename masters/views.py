@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
@@ -8,11 +9,12 @@ from masters.forms import (
     ItemAliasForm,
     ItemCategoryForm,
     ItemForm,
+    RateContractForm,
     SiteForm,
     VendorDocumentForm,
     VendorForm,
 )
-from masters.models import Item, ItemAlias, ItemCategory, Site, Vendor, VendorDocument
+from masters.models import Item, ItemAlias, ItemCategory, RateContract, Site, Vendor, VendorDocument
 from masters.permissions import MastersManagerRequiredMixin
 
 PAGE_SIZE = 20
@@ -229,6 +231,7 @@ class VendorDetailView(MastersManagerRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["document_form"] = VendorDocumentForm()
+        ctx["rate_contract_form"] = RateContractForm()
         return ctx
 
 
@@ -272,4 +275,34 @@ class VendorDocumentDeleteView(MastersManagerRequiredMixin, View):
         doc = get_object_or_404(VendorDocument, pk=doc_pk, vendor_id=pk)
         doc.delete()
         messages.success(request, "Document removed.")
+        return redirect("masters:vendor_detail", pk=pk)
+
+
+class RateContractCreateView(MastersManagerRequiredMixin, View):
+    def post(self, request, pk):
+        vendor = get_object_or_404(Vendor, pk=pk)
+        form = RateContractForm(request.POST)
+        if form.is_valid():
+            contract = form.save(commit=False)
+            contract.vendor = vendor
+            contract.created_by = request.user
+            try:
+                contract.full_clean()
+            except ValidationError as exc:
+                messages.error(request, "Could not add rate contract: " + "; ".join(exc.messages))
+                return redirect("masters:vendor_detail", pk=vendor.pk)
+            contract.save()
+            messages.success(request, "Rate contract added.")
+        else:
+            messages.error(request, "Could not add rate contract: " + "; ".join(
+                f"{field}: {', '.join(errs)}" for field, errs in form.errors.items()
+            ))
+        return redirect("masters:vendor_detail", pk=vendor.pk)
+
+
+class RateContractDeleteView(MastersManagerRequiredMixin, View):
+    def post(self, request, pk, contract_pk):
+        contract = get_object_or_404(RateContract, pk=contract_pk, vendor_id=pk)
+        contract.delete()
+        messages.success(request, "Rate contract removed.")
         return redirect("masters:vendor_detail", pk=pk)

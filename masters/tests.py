@@ -1,3 +1,4 @@
+import datetime
 from decimal import Decimal
 
 from django.contrib.auth.models import Group, User
@@ -6,7 +7,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
-from masters.models import Item, ItemAlias, ItemCategory, Site, Vendor, VendorDocument
+from masters.models import Item, ItemAlias, ItemCategory, RateContract, Site, Vendor, VendorDocument
 
 
 class SiteModelTests(TestCase):
@@ -97,6 +98,93 @@ class VendorDocumentModelTests(TestCase):
             file=SimpleUploadedFile("gst.pdf", b"dummy content"),
         )
         self.assertIn(doc, vendor.documents.all())
+
+
+class RateContractModelTests(TestCase):
+    def setUp(self):
+        self.vendor = Vendor.objects.create(name="ABC Traders")
+        self.category = ItemCategory.objects.create(name="Cement")
+        self.item = Item.objects.create(name="OPC 53", category=self.category, unit=Item.Unit.BAG)
+
+    def test_current_rate_within_open_ended_window(self):
+        RateContract.objects.create(
+            vendor=self.vendor, item=self.item, rate=Decimal("380.00"),
+            valid_from=datetime.date(2026, 1, 1),
+        )
+        rate = RateContract.current_rate(self.vendor, self.item, on_date=datetime.date(2026, 6, 1))
+        self.assertEqual(rate, Decimal("380.00"))
+
+    def test_current_rate_outside_window_returns_none(self):
+        RateContract.objects.create(
+            vendor=self.vendor, item=self.item, rate=Decimal("380.00"),
+            valid_from=datetime.date(2026, 1, 1), valid_to=datetime.date(2026, 3, 31),
+        )
+        rate = RateContract.current_rate(self.vendor, self.item, on_date=datetime.date(2026, 6, 1))
+        self.assertIsNone(rate)
+
+    def test_current_rate_picks_latest_when_multiple_contracts(self):
+        RateContract.objects.create(
+            vendor=self.vendor, item=self.item, rate=Decimal("380.00"),
+            valid_from=datetime.date(2026, 1, 1), valid_to=datetime.date(2026, 3, 31),
+        )
+        RateContract.objects.create(
+            vendor=self.vendor, item=self.item, rate=Decimal("400.00"),
+            valid_from=datetime.date(2026, 4, 1),
+        )
+        rate = RateContract.current_rate(self.vendor, self.item, on_date=datetime.date(2026, 6, 1))
+        self.assertEqual(rate, Decimal("400.00"))
+
+    def test_no_contract_returns_none(self):
+        rate = RateContract.current_rate(self.vendor, self.item)
+        self.assertIsNone(rate)
+
+    def test_valid_to_before_valid_from_rejected(self):
+        contract = RateContract(
+            vendor=self.vendor, item=self.item, rate=Decimal("380.00"),
+            valid_from=datetime.date(2026, 6, 1), valid_to=datetime.date(2026, 1, 1),
+        )
+        with self.assertRaises(ValidationError):
+            contract.full_clean()
+
+    def test_duplicate_vendor_item_valid_from_rejected(self):
+        RateContract.objects.create(
+            vendor=self.vendor, item=self.item, rate=Decimal("380.00"),
+            valid_from=datetime.date(2026, 1, 1),
+        )
+        with self.assertRaises(Exception):
+            RateContract.objects.create(
+                vendor=self.vendor, item=self.item, rate=Decimal("400.00"),
+                valid_from=datetime.date(2026, 1, 1),
+            )
+
+
+class RateContractViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="po", password="pass12345")
+        self.user.groups.add(Group.objects.create(name="Purchase Officer (HO)"))
+        self.client.login(username="po", password="pass12345")
+        self.vendor = Vendor.objects.create(name="ABC Traders")
+        self.category = ItemCategory.objects.create(name="Cement")
+        self.item = Item.objects.create(name="OPC 53", category=self.category, unit=Item.Unit.BAG)
+
+    def test_add_rate_contract(self):
+        response = self.client.post(
+            reverse("masters:rate_contract_create", args=[self.vendor.pk]),
+            {"item": self.item.pk, "rate": "380.00", "valid_from": "2026-01-01", "valid_to": "", "remarks": ""},
+        )
+        self.assertRedirects(response, reverse("masters:vendor_detail", args=[self.vendor.pk]))
+        self.assertTrue(RateContract.objects.filter(vendor=self.vendor, item=self.item).exists())
+
+    def test_remove_rate_contract(self):
+        contract = RateContract.objects.create(
+            vendor=self.vendor, item=self.item, rate=Decimal("380.00"),
+            valid_from=datetime.date(2026, 1, 1),
+        )
+        response = self.client.post(
+            reverse("masters:rate_contract_delete", args=[self.vendor.pk, contract.pk])
+        )
+        self.assertRedirects(response, reverse("masters:vendor_detail", args=[self.vendor.pk]))
+        self.assertFalse(RateContract.objects.filter(pk=contract.pk).exists())
 
 
 # --- Views ------------------------------------------------------------

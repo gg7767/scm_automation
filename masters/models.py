@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
+from django.utils import timezone
 from simple_history.models import HistoricalRecords
 
 from masters.constants import INDIAN_STATES
@@ -185,3 +186,42 @@ class VendorDocument(TimeStampedModel):
 
     def __str__(self):
         return f"{self.label} ({self.vendor.code})"
+
+
+class RateContract(TimeStampedModel):
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name="rate_contracts")
+    item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="rate_contracts")
+    rate = models.DecimalField(max_digits=12, decimal_places=2)
+    valid_from = models.DateField()
+    valid_to = models.DateField(null=True, blank=True, help_text="Leave blank for open-ended.")
+    remarks = models.TextField(blank=True)
+
+    history = HistoricalRecords()
+
+    class Meta:
+        ordering = ["-valid_from"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["vendor", "item", "valid_from"], name="unique_vendor_item_valid_from"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.vendor.code}/{self.item.code} @ {self.rate} from {self.valid_from}"
+
+    def clean(self):
+        if self.valid_to and self.valid_from and self.valid_to < self.valid_from:
+            raise ValidationError({"valid_to": "Valid-to date cannot be before valid-from date."})
+
+    @classmethod
+    def current_rate(cls, vendor, item, on_date=None):
+        """Return the active contract rate for (vendor, item) on `on_date`
+        (default today), or None if no contract covers that date."""
+        on_date = on_date or timezone.localdate()
+        contract = (
+            cls.objects.filter(vendor=vendor, item=item, valid_from__lte=on_date)
+            .filter(models.Q(valid_to__isnull=True) | models.Q(valid_to__gte=on_date))
+            .order_by("-valid_from")
+            .first()
+        )
+        return contract.rate if contract else None

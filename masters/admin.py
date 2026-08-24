@@ -1,7 +1,7 @@
 from django.contrib import admin
 from simple_history.admin import SimpleHistoryAdmin
 
-from masters.models import Item, ItemAlias, ItemCategory, Site, Vendor, VendorDocument
+from masters.models import Item, ItemAlias, ItemCategory, RateContract, Site, Vendor, VendorDocument
 
 
 class ItemAliasInline(admin.TabularInline):
@@ -43,3 +43,11 @@ class VendorAdmin(SimpleHistoryAdmin):
     search_fields = ["code", "name", "gstin", "pan"]
     filter_horizontal = ["categories"]
     inlines = [VendorDocumentInline]
+
+
+@admin.register(RateContract)
+class RateContractAdmin(SimpleHistoryAdmin):
+    list_display = ["vendor", "item", "rate", "valid_from", "valid_to"]
+    list_filter = ["vendor", "item"]
+    search_fields = ["vendor__name", "vendor__code", "item__name", "item__code"]
+    autocomplete_fields = ["vendor", "item"]

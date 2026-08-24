@@ -1,6 +1,6 @@
 from django import forms
 
-from masters.models import Item, ItemAlias, ItemCategory, Site, Vendor, VendorDocument
+from masters.models import Item, ItemAlias, ItemCategory, RateContract, Site, Vendor, VendorDocument
 
 TEXT_INPUT_CLASSES = "mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-3 text-base"
 CHECKBOX_CLASSES = "rounded border-slate-300 h-5 w-5"
@@ -89,6 +89,21 @@ class VendorDocumentForm(TailwindFormMixin, forms.ModelForm):
     class Meta:
         model = VendorDocument
         fields = ["label", "file"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._style_fields()
+
+
+class RateContractForm(TailwindFormMixin, forms.ModelForm):
+    class Meta:
+        model = RateContract
+        fields = ["item", "rate", "valid_from", "valid_to", "remarks"]
+        widgets = {
+            "valid_from": forms.DateInput(attrs={"type": "date"}),
+            "valid_to": forms.DateInput(attrs={"type": "date"}),
+            "remarks": forms.Textarea(attrs={"rows": 2}),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
