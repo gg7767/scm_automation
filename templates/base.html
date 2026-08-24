@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}SCM Automation{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen flex flex-col">
+    <header class="bg-slate-900 text-white">
+        <nav class="max-w-6xl mx-auto px-4">
+            <div class="flex items-center justify-between h-14">
+                <a href="{% url 'home' %}" class="font-semibold text-lg tracking-tight">SCM Automation</a>
+
+                {% if user.is_authenticated %}
+                <button id="nav-toggle" class="sm:hidden p-2 -mr-2" aria-label="Toggle navigation" aria-expanded="false">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
+
+                <div class="hidden sm:flex items-center gap-4 text-sm">
+                    <span class="text-slate-300">{{ user.get_full_name|default:user.username }}</span>
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="px-3 py-2 rounded bg-slate-700 hover:bg-slate-600">Log out</button>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if user.is_authenticated %}
+            <div id="nav-menu" class="hidden sm:hidden pb-4 flex flex-col gap-2 text-sm">
+                <span class="text-slate-300 px-1">{{ user.get_full_name|default:user.username }}</span>
+                <form method="post" action="{% url 'logout' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="w-full text-left px-3 py-3 rounded bg-slate-700 hover:bg-slate-600">Log out</button>
+                </form>
+            </div>
+            {% endif %}
+        </nav>
+    </header>
+
+    <main class="flex-1 max-w-6xl w-full mx-auto px-4 py-6">
+        {% if messages %}
+        <div class="mb-4 space-y-2">
+            {% for message in messages %}
+            <div class="px-4 py-3 rounded border {% if message.tags == 'error' %}bg-red-50 border-red-300 text-red-800{% elif message.tags == 'success' %}bg-green-50 border-green-300 text-green-800{% else %}bg-blue-50 border-blue-300 text-blue-800{% endif %}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="text-center text-xs text-slate-500 py-4">
+        SCM Automation &mdash; Phase 1
+    </footer>
+
+    <script>
+        document.getElementById('nav-toggle')?.addEventListener('click', function () {
+            const menu = document.getElementById('nav-menu');
+            const expanded = this.getAttribute('aria-expanded') === 'true';
+            this.setAttribute('aria-expanded', String(!expanded));
+            menu.classList.toggle('hidden');
+        });
+    </script>
+</body>
+</html>

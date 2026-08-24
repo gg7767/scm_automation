@@ -1,0 +1,38 @@
+from django.contrib.auth.models import Group, User
+from django.core.management import call_command
+from django.test import TestCase
+from django.urls import reverse
+
+from accounts_stub.management.commands.seed_demo import ROLE_GROUPS
+
+
+class SeedDemoTests(TestCase):
+    def test_creates_all_role_groups(self):
+        call_command("seed_demo")
+        group_names = set(Group.objects.values_list("name", flat=True))
+        self.assertEqual(group_names, set(ROLE_GROUPS))
+
+    def test_idempotent(self):
+        call_command("seed_demo")
+        call_command("seed_demo")
+        self.assertEqual(Group.objects.count(), len(ROLE_GROUPS))
+
+
+class AuthAndHomeViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="pass12345")
+
+    def test_home_requires_login(self):
+        response = self.client.get(reverse("home"))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("login"), response.url)
+
+    def test_home_renders_for_logged_in_user(self):
+        self.client.login(username="alice", password="pass12345")
+        response = self.client.get(reverse("home"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "alice")
+
+    def test_login_view_renders(self):
+        response = self.client.get(reverse("login"))
+        self.assertEqual(response.status_code, 200)

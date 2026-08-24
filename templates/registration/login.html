@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Log in &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="max-w-sm mx-auto bg-white rounded-lg shadow p-6 mt-8">
+    <h1 class="text-lg font-semibold text-slate-900 mb-4">Log in</h1>
+
+    {% if form.errors %}
+    <div class="mb-4 px-3 py-2 rounded bg-red-50 border border-red-300 text-red-800 text-sm">
+        Your username and password didn't match. Please try again.
+    </div>
+    {% endif %}
+
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <div>
+            <label for="{{ form.username.id_for_label }}" class="block text-sm font-medium text-slate-700">Username</label>
+            <input type="text" name="username" id="{{ form.username.id_for_label }}" autofocus required
+                   class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-3 text-base">
+        </div>
+        <div>
+            <label for="{{ form.password.id_for_label }}" class="block text-sm font-medium text-slate-700">Password</label>
+            <input type="password" name="password" id="{{ form.password.id_for_label }}" required
+                   class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-3 text-base">
+        </div>
+        <input type="hidden" name="next" value="{{ next }}">
+        <button type="submit" class="w-full py-3 rounded bg-slate-900 text-white font-medium hover:bg-slate-800">
+            Log in
+        </button>
+    </form>
+</div>
+{% endblock %}
