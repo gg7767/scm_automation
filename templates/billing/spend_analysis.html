@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Spend Analysis &mdash; SCM Automation{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold text-slate-900 mb-4">Spend Analysis</h1>
+<p class="text-sm text-slate-500 mb-4">Based on matched bills (approved for payment or paid), not raw PO commitments.</p>
+
+<div class="flex gap-2 mb-4">
+    <a href="?group_by=vendor" class="px-3 py-2 rounded text-sm {% if group_by == 'vendor' %}bg-slate-900 text-white{% else %}bg-white border border-slate-300{% endif %}">By vendor</a>
+    <a href="?group_by=site" class="px-3 py-2 rounded text-sm {% if group_by == 'site' %}bg-slate-900 text-white{% else %}bg-white border border-slate-300{% endif %}">By site</a>
+    <a href="?group_by=month" class="px-3 py-2 rounded text-sm {% if group_by == 'month' %}bg-slate-900 text-white{% else %}bg-white border border-slate-300{% endif %}">By month</a>
+    <a href="?group_by=category" class="px-3 py-2 rounded text-sm {% if group_by == 'category' %}bg-slate-900 text-white{% else %}bg-white border border-slate-300{% endif %}">By category</a>
+</div>
+
+<div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-left text-slate-500"><tr><th class="px-4 py-3">{{ group_by|capfirst }}</th><th class="px-4 py-3">Total spend</th></tr></thead>
+        <tbody class="divide-y divide-slate-100">
+            {% for row in rows %}
+            <tr><td class="px-4 py-3">{{ row.label }}</td><td class="px-4 py-3">₹{{ row.total }}</td></tr>
+            {% empty %}<tr><td colspan="2" class="px-4 py-8 text-center text-slate-400">No matched bills yet.</td></tr>{% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

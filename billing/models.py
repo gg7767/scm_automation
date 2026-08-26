@@ -32,7 +32,14 @@ class VendorBill(TimeStampedModel):
     financial_year = models.CharField(max_length=5, blank=True, editable=False)
 
     vendor = models.ForeignKey(Vendor, on_delete=models.PROTECT, related_name="bills")
-    po = models.ForeignKey(PurchaseOrder, on_delete=models.PROTECT, related_name="bills")
+    po = models.ForeignKey(
+        PurchaseOrder, on_delete=models.PROTECT, related_name="bills", null=True, blank=True,
+        help_text="Leave blank for a freight bill linked to transport trips instead.",
+    )
+    transport_trips = models.ManyToManyField(
+        "logistics.TransportTrip", blank=True, related_name="bills",
+        help_text="For transporter freight bills, in place of a PO — uses a 2-way match (trip freight vs bill total).",
+    )
     site = models.ForeignKey("masters.Site", on_delete=models.PROTECT, related_name="bills", blank=True)
 
     invoice_scan = models.FileField(upload_to="vendor_bills/%Y/%m/")
@@ -80,7 +87,13 @@ class VendorBill(TimeStampedModel):
 
     def save(self, *args, **kwargs):
         if not self.site_id:
-            self.site = self.po.site
+            if self.po_id:
+                self.site = self.po.site
+            else:
+                raise ValueError(
+                    "A trip-based bill (no PO) must have `site` set explicitly before the "
+                    "first save, since transport_trips (M2M) isn't available until after save()."
+                )
         if not self.financial_year:
             self.financial_year = financial_year_label(self.vendor_invoice_date)
         if not self.bill_number:
@@ -150,9 +163,38 @@ class VendorBill(TimeStampedModel):
     def submit_for_matching(self, user):
         if self.status != self.Status.DRAFT:
             raise InvalidStatusTransition(f"Cannot match a bill in '{self.status}' status.")
-        if not self.lines.exists():
-            raise InvalidStatusTransition("Cannot match a bill with no lines.")
-        self._run_three_way_match(user)
+        if self.po_id:
+            if not self.lines.exists():
+                raise InvalidStatusTransition("Cannot match a bill with no lines.")
+            self._run_three_way_match(user)
+        elif self.transport_trips.exists():
+            self._run_two_way_match_for_trips(user)
+        else:
+            raise InvalidStatusTransition("A bill must be linked to a PO or at least one transport trip.")
+
+    def _run_two_way_match_for_trips(self, user):
+        """Freight bills from transporters: 2-way check (trip freight vs
+        bill total) in place of the full 3-way PO/GRN/bill match, since
+        there's no PO or GRN involved."""
+        from django.conf import settings as django_settings
+
+        total_tolerance = Decimal(str(django_settings.BILL_MATCH_TOTAL_TOLERANCE_RUPEES))
+        total_freight = sum((trip.freight_amount for trip in self.transport_trips.all()), Decimal("0.00"))
+        ok = abs(total_freight - self.grand_total) <= total_tolerance
+
+        self.match_result = {
+            "trip_match": {
+                "total_freight": str(total_freight), "bill_grand_total": str(self.grand_total), "ok": ok,
+            }
+        }
+        self.matched_at = timezone.now()
+        if ok:
+            self.status = self.Status.APPROVED_FOR_PAYMENT
+            self.approved_at = timezone.now()
+            self.save(update_fields=["match_result", "matched_at", "status", "approved_at", "updated_at"])
+        else:
+            self.status = self.Status.MISMATCH
+            self.save(update_fields=["match_result", "matched_at", "status", "updated_at"])
 
     def _run_three_way_match(self, user):
         from django.conf import settings as django_settings
@@ -233,6 +275,8 @@ class VendorBill(TimeStampedModel):
             line.po_line.save(update_fields=["qty_already_billed"])
 
     def _maybe_close_po(self, user):
+        if not self.po_id:
+            return  # trip-based bill, no PO to close
         po = self.po
         po.refresh_from_db()
         if not po.delivery_complete:

@@ -2,7 +2,7 @@ from django import forms
 from django.forms import modelformset_factory
 
 from masters.forms import TailwindFormMixin
-from stores.models import GRN, GRNLine
+from stores.models import GRN, GRNLine, StockIssue, StockIssueLine
 
 
 class GRNForm(TailwindFormMixin, forms.ModelForm):
@@ -31,4 +31,27 @@ GRNLineFormSet = modelformset_factory(
         "rejection_reason": forms.TextInput(attrs={"class": "w-full rounded border-slate-300 shadow-sm px-2 py-2 text-sm"}),
     },
     extra=0,
+)
+
+
+class StockIssueForm(TailwindFormMixin, forms.ModelForm):
+    class Meta:
+        model = StockIssue
+        fields = ["site", "purpose", "purpose_detail", "remarks"]
+        widgets = {"remarks": forms.Textarea(attrs={"rows": 2})}
+
+    def __init__(self, *args, restrict_site=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if restrict_site is not None:
+            self.fields["site"].queryset = self.fields["site"].queryset.filter(pk=restrict_site.pk)
+            self.fields["site"].initial = restrict_site
+            self.fields["site"].widget = forms.HiddenInput()
+        self._style_fields()
+
+
+StockIssueLineFormSet = modelformset_factory(
+    StockIssueLine,
+    fields=["item", "qty", "remarks"],
+    widgets={"qty": forms.NumberInput(attrs=_NUMBER_ATTRS)},
+    extra=5,
 )

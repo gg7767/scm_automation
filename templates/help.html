@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}How it works &mdash; SCM Automation{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold text-slate-900 mb-4">How it works</h1>
+<p class="text-sm text-slate-500 mb-6">One short guide per workflow. If you're stuck on something not listed here, ask your SCM Head or Purchase Officer.</p>
+
+<div class="space-y-4">
+    <details class="bg-white rounded-lg shadow p-4">
+        <summary class="font-medium text-slate-900 cursor-pointer">Raising an indent (site)</summary>
+        <ol class="mt-2 text-sm text-slate-700 list-decimal list-inside space-y-1">
+            <li>Go to <strong>Indents → Raise indent</strong>.</li>
+            <li>Pick a priority — Urgent notifies the approver immediately.</li>
+            <li>Search for each item you need, set the quantity, and add it.</li>
+            <li>Submit for approval once every item is listed.</li>
+        </ol>
+    </details>
+
+    <details class="bg-white rounded-lg shadow p-4">
+        <summary class="font-medium text-slate-900 cursor-pointer">Converting an approved indent to a PO (HO)</summary>
+        <ol class="mt-2 text-sm text-slate-700 list-decimal list-inside space-y-1">
+            <li>Open the approved indent and click <strong>Convert to PO</strong>.</li>
+            <li>Pick a vendor and enter how much of each item to order now — you can order less than the full quantity and convert the rest later, even to a different vendor.</li>
+            <li>The draft PO opens next — add pricing, then submit for approval as usual.</li>
+        </ol>
+    </details>
+
+    <details class="bg-white rounded-lg shadow p-4">
+        <summary class="font-medium text-slate-900 cursor-pointer">Creating and approving a PO</summary>
+        <ol class="mt-2 text-sm text-slate-700 list-decimal list-inside space-y-1">
+            <li><strong>Purchase Orders → New PO</strong>, pick vendor and site.</li>
+            <li>Add line items — search by item name/code; the rate auto-fills from an active rate contract if one exists.</li>
+            <li>Submit for approval. Who can approve depends on the PO's total value (set up in Approval Rules).</li>
+            <li>Once approved, mark it as sent (email/WhatsApp/manual) and download the PDF for the vendor.</li>
+        </ol>
+    </details>
+
+    <details class="bg-white rounded-lg shadow p-4">
+        <summary class="font-medium text-slate-900 cursor-pointer">Recording a delivery (GRN)</summary>
+        <ol class="mt-2 text-sm text-slate-700 list-decimal list-inside space-y-1">
+            <li><strong>GRNs → Record delivery</strong>, pick the PO the delivery is against.</li>
+            <li>Enter the challan number/date and take a photo of the challan — required.</li>
+            <li>Adjust received/accepted/rejected quantities per item if anything's short or damaged.</li>
+            <li>Submit — this cannot be undone; a mistake needs a reversal GRN from HO.</li>
+        </ol>
+    </details>
+
+    <details class="bg-white rounded-lg shadow p-4">
+        <summary class="font-medium text-slate-900 cursor-pointer">Entering a vendor bill and matching it (Accounts)</summary>
+        <ol class="mt-2 text-sm text-slate-700 list-decimal list-inside space-y-1">
+            <li><strong>Bills → Enter bill</strong>, pick the PO, enter the vendor's invoice number/date and upload the scan.</li>
+            <li>Adjust quantities/rates on each line to match the actual invoice, then click <strong>Run 3-way match</strong>.</li>
+            <li>A clean match auto-approves for payment. A mismatch needs SCM Head to override with a reason, or send it back to the vendor via a remark.</li>
+        </ol>
+    </details>
+
+    <details class="bg-white rounded-lg shadow p-4">
+        <summary class="font-medium text-slate-900 cursor-pointer">Recording a payment (Accounts)</summary>
+        <ol class="mt-2 text-sm text-slate-700 list-decimal list-inside space-y-1">
+            <li><strong>Payments → Record payment</strong> — enter the vendor, amount, mode, and reference number.</li>
+            <li>Open the payment and allocate it to one or more approved bills — a single payment can cover several bills, and an advance can sit unallocated until a bill arrives.</li>
+        </ol>
+    </details>
+
+    <details class="bg-white rounded-lg shadow p-4">
+        <summary class="font-medium text-slate-900 cursor-pointer">Issuing stock (site)</summary>
+        <ol class="mt-2 text-sm text-slate-700 list-decimal list-inside space-y-1">
+            <li><strong>Stock → Issue stock</strong>, pick a purpose, and list what's being used.</li>
+            <li>Submit — this reduces stock immediately and cannot be undone (log a fresh issue if you made a mistake).</li>
+        </ol>
+    </details>
+
+    <details class="bg-white rounded-lg shadow p-4">
+        <summary class="font-medium text-slate-900 cursor-pointer">Logging machinery usage</summary>
+        <ol class="mt-2 text-sm text-slate-700 list-decimal list-inside space-y-1">
+            <li>Open the machine under <strong>Machinery</strong> and use <strong>Deploy here</strong> to move it to your site.</li>
+            <li>Add a daily usage log with hours run, fuel, and the operator's name.</li>
+        </ol>
+    </details>
+</div>
+{% endblock %}

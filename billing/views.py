@@ -333,3 +333,14 @@ class VendorLedgerExcelView(BillAccessRequiredMixin, View):
         response["Content-Disposition"] = f'attachment; filename="{vendor.code}_ledger.xlsx"'
         workbook.save(response)
         return response
+
+
+class SpendAnalysisView(BillAccessRequiredMixin, View):
+    template_name = "billing/spend_analysis.html"
+
+    def get(self, request):
+        from billing.services import spend_analysis
+
+        group_by = request.GET.get("group_by", "vendor")
+        rows = spend_analysis(group_by=group_by)
+        return render(request, self.template_name, {"rows": rows, "group_by": group_by})

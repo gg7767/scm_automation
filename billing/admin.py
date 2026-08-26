@@ -29,6 +29,7 @@ class VendorBillAdmin(SimpleHistoryAdmin):
     list_filter = ["status", "site"]
     search_fields = ["bill_number", "vendor_invoice_number", "vendor__name"]
     readonly_fields = ["bill_number", "financial_year", "match_result"]
+    filter_horizontal = ["transport_trips"]
     inlines = [VendorBillLineInline, BillRemarkInline]
 
 

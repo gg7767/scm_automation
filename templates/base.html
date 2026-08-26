@@ -19,6 +19,9 @@
                     {% if can_access_indents %}
                     <a href="{% url 'indents:indent_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Indents</a>
                     <a href="{% url 'stores:grn_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">GRNs</a>
+                    <a href="{% url 'stores:stock_balance_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Stock</a>
+                    <a href="{% url 'logistics:trip_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Trips</a>
+                    <a href="{% url 'assets:machine_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Machinery</a>
                     {% endif %}
                     {% if can_view_po %}
                     <a href="{% url 'purchase:po_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Purchase Orders</a>
@@ -30,6 +33,7 @@
                     <a href="{% url 'billing:bill_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Bills</a>
                     <a href="{% url 'billing:payment_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Payments</a>
                     <a href="{% url 'billing:payables_aging' %}" class="px-3 py-2 rounded hover:bg-slate-800">Payables Aging</a>
+                    <a href="{% url 'billing:spend_analysis' %}" class="px-3 py-2 rounded hover:bg-slate-800">Spend Analysis</a>
                     {% endif %}
                     {% if is_masters_manager %}
                     <a href="{% url 'masters:site_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Sites</a>
@@ -47,6 +51,7 @@
                 </button>
 
                 <div class="hidden sm:flex items-center gap-4 text-sm">
+                    <a href="{% url 'help' %}" class="text-slate-300 hover:text-white">Help</a>
                     <span class="text-slate-300">{{ user.get_full_name|default:user.username }}</span>
                     <form method="post" action="{% url 'logout' %}">
                         {% csrf_token %}
@@ -61,6 +66,9 @@
                 {% if can_access_indents %}
                 <a href="{% url 'indents:indent_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Indents</a>
                 <a href="{% url 'stores:grn_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">GRNs</a>
+                <a href="{% url 'stores:stock_balance_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Stock</a>
+                <a href="{% url 'logistics:trip_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Trips</a>
+                <a href="{% url 'assets:machine_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Machinery</a>
                 {% endif %}
                 {% if can_view_po %}
                 <a href="{% url 'purchase:po_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Purchase Orders</a>
@@ -72,6 +80,7 @@
                 <a href="{% url 'billing:bill_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Bills</a>
                 <a href="{% url 'billing:payment_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Payments</a>
                 <a href="{% url 'billing:payables_aging' %}" class="px-3 py-3 rounded hover:bg-slate-800">Payables Aging</a>
+                <a href="{% url 'billing:spend_analysis' %}" class="px-3 py-3 rounded hover:bg-slate-800">Spend Analysis</a>
                 {% endif %}
                 {% if is_masters_manager %}
                 <a href="{% url 'masters:site_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Sites</a>
@@ -79,7 +88,8 @@
                 <a href="{% url 'masters:item_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Items</a>
                 <a href="{% url 'masters:vendor_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Vendors</a>
                 {% endif %}
-                {% if is_masters_manager or can_view_po %}<hr class="border-slate-700 my-1">{% endif %}
+                <hr class="border-slate-700 my-1">
+                <a href="{% url 'help' %}" class="px-3 py-3 rounded hover:bg-slate-800">Help</a>
                 <span class="text-slate-300 px-1">{{ user.get_full_name|default:user.username }}</span>
                 <form method="post" action="{% url 'logout' %}">
                     {% csrf_token %}

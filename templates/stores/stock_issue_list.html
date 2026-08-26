@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Stock Issues &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-semibold text-slate-900">Stock Issues</h1>
+    <a href="{% url 'stores:stock_issue_create' %}" class="px-4 py-3 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800">+ Issue stock</a>
+</div>
+<div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-left text-slate-500">
+            <tr><th class="px-4 py-3">Issue Number</th><th class="px-4 py-3">Site</th><th class="px-4 py-3">Purpose</th><th class="px-4 py-3">Date</th><th class="px-4 py-3">Status</th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+            {% for issue in issues %}
+            <tr class="hover:bg-slate-50 cursor-pointer" onclick="window.location='{% url 'stores:stock_issue_detail' issue.pk %}'">
+                <td class="px-4 py-3 font-medium text-slate-900">{{ issue.issue_number }}</td>
+                <td class="px-4 py-3">{{ issue.site.code }}</td>
+                <td class="px-4 py-3">{{ issue.get_purpose_display }}</td>
+                <td class="px-4 py-3">{{ issue.issue_date|date:"d-m-Y" }}</td>
+                <td class="px-4 py-3">{% if issue.status == "draft" %}<span class="px-2 py-1 rounded bg-slate-100 text-slate-600 text-xs">Draft</span>{% else %}<span class="px-2 py-1 rounded bg-green-50 text-green-700 text-xs">Submitted</span>{% endif %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">No stock issues yet.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% include "partials/_pagination.html" %}
+{% endblock %}

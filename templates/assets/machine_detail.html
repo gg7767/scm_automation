@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}{{ machine.name }} &mdash; SCM Automation{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold text-slate-900 mb-4">{{ machine.code }} — {{ machine.name }}</h1>
+
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <dl class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+        <div><dt class="text-slate-500">Category</dt><dd class="font-medium">{{ machine.get_category_display }}</dd></div>
+        <div><dt class="text-slate-500">Ownership</dt><dd class="font-medium">{{ machine.get_ownership_display }}</dd></div>
+        <div><dt class="text-slate-500">Status</dt><dd class="font-medium">{{ machine.get_status_display }}</dd></div>
+        {% if machine.hire_vendor %}<div><dt class="text-slate-500">Hire vendor</dt><dd class="font-medium">{{ machine.hire_vendor.name }} (₹{{ machine.hire_rate }} {{ machine.get_rate_unit_display }})</dd></div>{% endif %}
+        <div><dt class="text-slate-500">Current site</dt><dd class="font-medium">{{ machine.current_deployment.site.code|default:"Unassigned" }}</dd></div>
+    </dl>
+</div>
+
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <h2 class="text-sm font-semibold text-slate-900 mb-3">Deployment</h2>
+    <ul class="divide-y divide-slate-100 text-sm mb-4">
+        {% for d in machine.deployments.all %}
+        <li class="py-2">{{ d.site.code }}: {{ d.from_date|date:"d-m-Y" }} — {{ d.to_date|date:"d-m-Y"|default:"present" }}</li>
+        {% empty %}<li class="py-2 text-slate-400">Never deployed.</li>{% endfor %}
+    </ul>
+    <form method="post" action="{% url 'assets:machine_deploy' machine.pk %}" class="flex flex-wrap gap-2 items-end">
+        {% csrf_token %}
+        <div>
+            <label class="block text-xs font-medium text-slate-500">Site</label>
+            {{ deployment_form.site }}
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-500">From date</label>
+            {{ deployment_form.from_date }}
+        </div>
+        <button type="submit" class="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800">Deploy here</button>
+    </form>
+</div>
+
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <h2 class="text-sm font-semibold text-slate-900 mb-3">Usage logs</h2>
+    <ul class="divide-y divide-slate-100 text-sm mb-4">
+        {% for log in machine.logs.all %}
+        <li class="py-2">{{ log.log_date|date:"d-m-Y" }}: {{ log.hours_run|default:"—" }} hrs, {{ log.km|default:"—" }} km, {{ log.fuel_litres|default:"—" }} L — {{ log.operator_name }}</li>
+        {% empty %}<li class="py-2 text-slate-400">No logs yet.</li>{% endfor %}
+    </ul>
+    <form method="post" action="{% url 'assets:machine_log_create' machine.pk %}" class="grid grid-cols-2 sm:grid-cols-3 gap-2 items-end">
+        {% csrf_token %}
+        <div><label class="block text-xs font-medium text-slate-500">Date</label>{{ log_form.log_date }}</div>
+        <div><label class="block text-xs font-medium text-slate-500">Hours run</label>{{ log_form.hours_run }}</div>
+        <div><label class="block text-xs font-medium text-slate-500">KM</label>{{ log_form.km }}</div>
+        <div><label class="block text-xs font-medium text-slate-500">Fuel (L)</label>{{ log_form.fuel_litres }}</div>
+        <div><label class="block text-xs font-medium text-slate-500">Operator</label>{{ log_form.operator_name }}</div>
+        <button type="submit" class="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800">Add log</button>
+    </form>
+</div>
+
+{% if maintenance_schedules %}
+<div class="bg-white rounded-lg shadow p-6">
+    <h2 class="text-sm font-semibold text-slate-900 mb-3">Maintenance schedules</h2>
+    <ul class="divide-y divide-slate-100 text-sm">
+        {% for s in maintenance_schedules %}
+        <li class="py-2 flex justify-between">
+            <span>Every {{ s.every_n_days|default:"—" }} days / {{ s.every_n_hours|default:"—" }} hours — last done {{ s.last_done_date|date:"d-m-Y"|default:"never" }}</span>
+            {% if s.is_due %}<span class="text-red-600 font-medium">Due</span>{% else %}<span class="text-green-700">OK</span>{% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+{% endblock %}

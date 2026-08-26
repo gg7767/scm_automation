@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ trip.trip_number }} &mdash; SCM Automation{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold text-slate-900 mb-4">{{ trip.trip_number }}</h1>
+<div class="bg-white rounded-lg shadow p-6">
+    <dl class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+        <div><dt class="text-slate-500">Date</dt><dd class="font-medium">{{ trip.trip_date|date:"d-m-Y" }}</dd></div>
+        <div><dt class="text-slate-500">Vehicle</dt><dd class="font-medium">{{ trip.vehicle_number }}</dd></div>
+        <div><dt class="text-slate-500">Transporter</dt><dd class="font-medium">{{ trip.transporter.name }}</dd></div>
+        <div><dt class="text-slate-500">Driver</dt><dd class="font-medium">{{ trip.driver_name|default:"—" }} {{ trip.driver_phone }}</dd></div>
+        <div><dt class="text-slate-500">From</dt><dd class="font-medium">{{ trip.from_location }}</dd></div>
+        <div><dt class="text-slate-500">To site</dt><dd class="font-medium">{{ trip.to_site.name }}</dd></div>
+        {% if trip.linked_po %}<div><dt class="text-slate-500">Linked PO</dt><dd class="font-medium">{{ trip.linked_po.po_number }}</dd></div>{% endif %}
+        {% if trip.element_description %}<div><dt class="text-slate-500">Element</dt><dd class="font-medium">{{ trip.element_description }}</dd></div>{% endif %}
+        <div><dt class="text-slate-500">Freight</dt><dd class="font-medium">₹{{ trip.freight_amount }}</dd></div>
+        <div><dt class="text-slate-500">Billable to</dt><dd class="font-medium">{{ trip.get_billable_to_display }}</dd></div>
+        <div><dt class="text-slate-500">POD</dt><dd class="font-medium">{% if trip.pod_photo %}<a href="{{ trip.pod_photo.url }}" target="_blank" class="text-slate-700 hover:underline">View</a>{% else %}<span class="text-red-600">Missing</span>{% endif %}</dd></div>
+        <div class="sm:col-span-3"><dt class="text-slate-500">Remarks</dt><dd class="font-medium">{{ trip.remarks|default:"—" }}</dd></div>
+    </dl>
+</div>
+{% endblock %}

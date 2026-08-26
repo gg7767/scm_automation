@@ -28,4 +28,5 @@ urlpatterns = [
     path("vendors/<int:pk>/ledger/export/", views.VendorLedgerExcelView.as_view(), name="vendor_ledger_export"),
     path("payables-aging/", views.PayablesAgingView.as_view(), name="payables_aging"),
     path("payables-aging/export/", views.PayablesAgingExcelView.as_view(), name="payables_aging_export"),
+    path("reports/spend/", views.SpendAnalysisView.as_view(), name="spend_analysis"),
 ]

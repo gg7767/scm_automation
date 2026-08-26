@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Procurement Lead Time &mdash; SCM Automation{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold text-slate-900 mb-4">Procurement Lead Time</h1>
+<p class="text-sm text-slate-500 mb-4">Indent approved → PO sent → first delivery. Only POs created from an indent are included.</p>
+
+{% if overall_median_sent_to_first_grn != None %}
+<div class="bg-white rounded-lg shadow p-4 mb-6">
+    <div class="text-xs text-slate-500">Overall median: sent → first delivery</div>
+    <div class="text-2xl font-semibold text-slate-900">{{ overall_median_sent_to_first_grn }} days</div>
+</div>
+{% endif %}
+
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+    <div class="bg-white rounded-lg shadow p-4">
+        <h2 class="text-sm font-semibold text-slate-900 mb-2">Median (sent → first delivery) by vendor</h2>
+        <table class="w-full text-sm">
+            <tbody class="divide-y divide-slate-100">
+                {% for vendor, days in median_by_vendor.items %}
+                <tr><td class="py-2">{{ vendor }}</td><td class="py-2 text-right">{{ days }} days</td></tr>
+                {% empty %}<tr><td class="py-2 text-slate-400">No data.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <h2 class="text-sm font-semibold text-slate-900 mb-2">Median by category</h2>
+        <table class="w-full text-sm">
+            <tbody class="divide-y divide-slate-100">
+                {% for category, days in median_by_category.items %}
+                <tr><td class="py-2">{{ category }}</td><td class="py-2 text-right">{{ days }} days</td></tr>
+                {% empty %}<tr><td class="py-2 text-slate-400">No data.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-left text-slate-500">
+            <tr><th class="px-4 py-3">PO</th><th class="px-4 py-3">Vendor</th><th class="px-4 py-3">Indent→Sent</th><th class="px-4 py-3">Sent→1st GRN</th><th class="px-4 py-3">Sent→Complete</th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+            {% for row in rows %}
+            <tr>
+                <td class="px-4 py-3 font-medium text-slate-900">{{ row.po.po_number }}</td>
+                <td class="px-4 py-3">{{ row.vendor }}</td>
+                <td class="px-4 py-3">{{ row.indent_to_sent_days }} days</td>
+                <td class="px-4 py-3">{{ row.sent_to_first_grn_days }} days</td>
+                <td class="px-4 py-3">{{ row.sent_to_complete_days|default:"—" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">No indent-originated POs with deliveries yet.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -47,3 +47,49 @@ def vendor_ledger(vendor):
     pos = vendor.purchase_orders.select_related("site").order_by("-created_at")
     open_value = sum((po.grand_total for po in pos if po.status in OPEN_STATUSES), start=0)
     return {"purchase_orders": pos, "open_value": open_value}
+
+
+def procurement_lead_time():
+    """Indent approved -> PO sent -> first GRN -> delivery complete, in
+    days, with medians by vendor and by vendor's (first) category.
+    Delivery-complete date is approximated by the latest submitted GRN's
+    received_date for that PO (there's no separate completed-at timestamp
+    on PurchaseOrder — delivery_complete is a plain boolean)."""
+    import statistics
+    from collections import defaultdict
+
+    rows = []
+    qs = PurchaseOrder.objects.filter(
+        source_indent__isnull=False, source_indent__approved_at__isnull=False, sent_at__isnull=False,
+    ).select_related("vendor", "source_indent")
+
+    for po in qs:
+        grn_dates = list(po.grns.filter(status="submitted").values_list("received_date", flat=True))
+        if not grn_dates:
+            continue
+        first_grn = min(grn_dates)
+        last_grn = max(grn_dates) if po.delivery_complete else None
+
+        indent_to_sent = (po.sent_at.date() - po.source_indent.approved_at.date()).days
+        sent_to_first_grn = (first_grn - po.sent_at.date()).days
+        sent_to_complete = (last_grn - po.sent_at.date()).days if last_grn else None
+
+        category = po.vendor.categories.first()
+        rows.append({
+            "po": po, "vendor": po.vendor.name, "category": category.name if category else "Uncategorized",
+            "indent_to_sent_days": indent_to_sent, "sent_to_first_grn_days": sent_to_first_grn,
+            "sent_to_complete_days": sent_to_complete,
+        })
+
+    def medians_by(key):
+        buckets = defaultdict(list)
+        for row in rows:
+            buckets[row[key]].append(row["sent_to_first_grn_days"])
+        return {k: statistics.median(v) for k, v in buckets.items()}
+
+    return {
+        "rows": rows,
+        "median_by_vendor": medians_by("vendor"),
+        "median_by_category": medians_by("category"),
+        "overall_median_sent_to_first_grn": statistics.median([r["sent_to_first_grn_days"] for r in rows]) if rows else None,
+    }

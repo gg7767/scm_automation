@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Transport Trips &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-semibold text-slate-900">Transport Trips</h1>
+    <div class="flex gap-2">
+        <a href="{% url 'logistics:freight_report' %}" class="px-4 py-2 rounded border border-slate-300 text-sm font-medium hover:bg-slate-50">Freight report</a>
+        <a href="{% url 'logistics:trip_create' %}" class="px-4 py-3 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800">+ Log trip</a>
+    </div>
+</div>
+
+<form method="get" class="bg-white rounded-lg shadow p-4 mb-4 flex flex-wrap gap-3 items-end">
+    <div>
+        <label class="block text-xs font-medium text-slate-500">Site</label>
+        <select name="site" class="mt-1 rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+            <option value="">All</option>
+            {% for s in sites %}
+            <option value="{{ s.pk }}" {% if site == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.code }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="without_pod" value="1" {% if without_pod %}checked{% endif %}> Missing POD only
+    </label>
+    <button type="submit" class="px-4 py-2 rounded bg-slate-200 text-slate-800 text-sm font-medium hover:bg-slate-300">Filter</button>
+</form>
+
+<div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-left text-slate-500">
+            <tr>
+                <th class="px-4 py-3">Trip Number</th>
+                <th class="px-4 py-3">Date</th>
+                <th class="px-4 py-3">Transporter</th>
+                <th class="px-4 py-3">To site</th>
+                <th class="px-4 py-3">Freight</th>
+                <th class="px-4 py-3">POD</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+            {% for trip in trips %}
+            <tr class="hover:bg-slate-50 cursor-pointer" onclick="window.location='{% url 'logistics:trip_detail' trip.pk %}'">
+                <td class="px-4 py-3 font-medium text-slate-900">{{ trip.trip_number }}</td>
+                <td class="px-4 py-3">{{ trip.trip_date|date:"d-m-Y" }}</td>
+                <td class="px-4 py-3">{{ trip.transporter.name }}</td>
+                <td class="px-4 py-3">{{ trip.to_site.code }}</td>
+                <td class="px-4 py-3">₹{{ trip.freight_amount }}</td>
+                <td class="px-4 py-3">{% if trip.pod_photo %}<span class="text-green-700">Yes</span>{% else %}<span class="text-red-600">Missing</span>{% endif %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">No trips logged yet.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% include "partials/_pagination.html" %}
+{% endblock %}

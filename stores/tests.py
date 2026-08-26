@@ -8,8 +8,19 @@ from django.urls import reverse
 
 from masters.models import Item, ItemCategory, Site, Vendor
 from purchase.models import PurchaseOrder, PurchaseOrderLine
-from stores.models import DebitNoteCandidate, GRN, GRNLine, InvalidStatusTransition
-from stores.services import populate_lines_from_po
+from stores.models import (
+    DebitNoteCandidate,
+    GRN,
+    GRNLine,
+    InvalidStatusTransition,
+    SiteItemSetting,
+    StockBalance,
+    StockIssue,
+    StockIssueLine,
+    StockLedger,
+    StockTransfer,
+)
+from stores.services import dispatch_transfer, populate_lines_from_po
 
 
 # A real 1x1 transparent PNG — Django's ImageField validates actual image
@@ -280,3 +291,295 @@ class GRNViewFlowTests(TestCase):
         self.client.post(reverse("stores:grn_submit", args=[grn.pk]))
         grn.refresh_from_db()
         self.assertEqual(grn.status, GRN.Status.SUBMITTED)
+
+
+# --- Phase 4: Inventory --------------------------------------------------
+
+class GRNReceiptWritesStockLedgerTests(TestCase):
+    def setUp(self):
+        self.site = Site.objects.create(name="Hyderabad Factory 1", code="HYD-F1")
+        self.vendor = Vendor.objects.create(name="ABC Traders")
+        self.category = ItemCategory.objects.create(name="Cement")
+        self.item = Item.objects.create(name="OPC 53", category=self.category, unit=Item.Unit.BAG)
+        self.user = User.objects.create_user(username="siteuser", password="pass12345")
+        self.po = PurchaseOrder.objects.create(vendor=self.vendor, site=self.site, status=PurchaseOrder.Status.SENT)
+        self.po_line = PurchaseOrderLine.objects.create(po=self.po, item=self.item, quantity=Decimal("100"), rate=Decimal("10"))
+
+    def test_grn_submission_writes_ledger_and_updates_balance(self):
+        grn = GRN.objects.create(
+            po=self.po, received_by=self.user, challan_number="CH-1",
+            challan_date=datetime.date(2026, 1, 1), challan_photo=_tiny_photo(),
+        )
+        GRNLine.objects.create(grn=grn, po_line=self.po_line, qty_received=Decimal("40"), qty_accepted=Decimal("40"))
+        grn.submit(self.user)
+
+        entry = StockLedger.objects.get(ref_doc_type="GRN", ref_doc_id=grn.pk)
+        self.assertEqual(entry.qty, Decimal("40.000"))
+        self.assertEqual(entry.txn_type, StockLedger.TxnType.GRN_RECEIPT)
+
+        balance = StockBalance.objects.get(site=self.site, item=self.item)
+        self.assertEqual(balance.quantity, Decimal("40.000"))
+
+    def test_rejected_qty_not_added_to_stock(self):
+        grn = GRN.objects.create(
+            po=self.po, received_by=self.user, challan_number="CH-1",
+            challan_date=datetime.date(2026, 1, 1), challan_photo=_tiny_photo(),
+        )
+        GRNLine.objects.create(grn=grn, po_line=self.po_line, qty_received=Decimal("40"), qty_accepted=Decimal("30"), qty_rejected=Decimal("10"))
+        grn.submit(self.user)
+        balance = StockBalance.objects.get(site=self.site, item=self.item)
+        self.assertEqual(balance.quantity, Decimal("30.000"))
+
+
+class StockIssueTests(TestCase):
+    def setUp(self):
+        self.site = Site.objects.create(name="Hyderabad Factory 1", code="HYD-F1")
+        self.category = ItemCategory.objects.create(name="Cement")
+        self.item = Item.objects.create(name="OPC 53", category=self.category, unit=Item.Unit.BAG)
+        self.user = User.objects.create_user(username="siteuser", password="pass12345")
+        from stores.models import write_stock_ledger_entry
+        write_stock_ledger_entry(
+            site=self.site, item=self.item, txn_date=datetime.date(2026, 1, 1),
+            txn_type=StockLedger.TxnType.OPENING, qty=Decimal("50"),
+        )
+
+    def test_issue_number_format(self):
+        issue = StockIssue.objects.create(site=self.site, issued_by=self.user, purpose=StockIssue.Purpose.PRODUCTION)
+        self.assertTrue(issue.issue_number.startswith(f"ISS/{self.site.code}/"))
+
+    def test_issue_within_stock_succeeds(self):
+        issue = StockIssue.objects.create(site=self.site, issued_by=self.user, purpose=StockIssue.Purpose.PRODUCTION)
+        StockIssueLine.objects.create(issue=issue, item=self.item, qty=Decimal("20"))
+        issue.submit(self.user)
+        self.assertEqual(issue.status, StockIssue.Status.SUBMITTED)
+        balance = StockBalance.objects.get(site=self.site, item=self.item)
+        self.assertEqual(balance.quantity, Decimal("30.000"))
+
+    def test_issue_beyond_stock_blocked_by_default(self):
+        issue = StockIssue.objects.create(site=self.site, issued_by=self.user, purpose=StockIssue.Purpose.PRODUCTION)
+        StockIssueLine.objects.create(issue=issue, item=self.item, qty=Decimal("100"))
+        with self.assertRaises(InvalidStatusTransition):
+            issue.submit(self.user)
+        balance = StockBalance.objects.get(site=self.site, item=self.item)
+        self.assertEqual(balance.quantity, Decimal("50.000"))  # unchanged
+
+    def test_issue_beyond_stock_allowed_when_setting_enabled(self):
+        with self.settings(ALLOW_NEGATIVE_STOCK=True):
+            issue = StockIssue.objects.create(site=self.site, issued_by=self.user, purpose=StockIssue.Purpose.PRODUCTION)
+            StockIssueLine.objects.create(issue=issue, item=self.item, qty=Decimal("100"))
+            issue.submit(self.user)
+        balance = StockBalance.objects.get(site=self.site, item=self.item)
+        self.assertEqual(balance.quantity, Decimal("-50.000"))
+
+    def test_cannot_submit_issue_with_no_lines(self):
+        issue = StockIssue.objects.create(site=self.site, issued_by=self.user, purpose=StockIssue.Purpose.OTHER)
+        with self.assertRaises(InvalidStatusTransition):
+            issue.submit(self.user)
+
+
+class StockTransferTests(TestCase):
+    def setUp(self):
+        self.site1 = Site.objects.create(name="Hyderabad Factory 1", code="HYD-F1")
+        self.site2 = Site.objects.create(name="Chennai Factory", code="CHN-F1")
+        self.category = ItemCategory.objects.create(name="Cement")
+        self.item = Item.objects.create(name="OPC 53", category=self.category, unit=Item.Unit.BAG)
+        self.user = User.objects.create_user(username="siteuser", password="pass12345")
+        from stores.models import write_stock_ledger_entry
+        write_stock_ledger_entry(
+            site=self.site1, item=self.item, txn_date=datetime.date(2026, 1, 1),
+            txn_type=StockLedger.TxnType.OPENING, qty=Decimal("100"),
+        )
+
+    def test_dispatch_writes_transfer_out(self):
+        transfer = dispatch_transfer(self.site1, self.site2, "AP09AB1234", self.user, {self.item: Decimal("30")})
+        self.assertEqual(transfer.status, StockTransfer.Status.DISPATCHED)
+        balance = StockBalance.objects.get(site=self.site1, item=self.item)
+        self.assertEqual(balance.quantity, Decimal("70.000"))
+
+    def test_dispatch_beyond_stock_blocked(self):
+        with self.assertRaises(ValueError):
+            dispatch_transfer(self.site1, self.site2, "AP09AB1234", self.user, {self.item: Decimal("200")})
+
+    def test_full_receipt_writes_transfer_in(self):
+        transfer = dispatch_transfer(self.site1, self.site2, "AP09AB1234", self.user, {self.item: Decimal("30")})
+        line = transfer.lines.first()
+        transfer.receive(self.user, {line: Decimal("30")})
+        self.assertEqual(transfer.status, StockTransfer.Status.RECEIVED)
+        balance = StockBalance.objects.get(site=self.site2, item=self.item)
+        self.assertEqual(balance.quantity, Decimal("30.000"))
+
+    def test_shortage_in_transit_logged(self):
+        transfer = dispatch_transfer(self.site1, self.site2, "AP09AB1234", self.user, {self.item: Decimal("30")})
+        line = transfer.lines.first()
+        transfer.receive(self.user, {line: Decimal("25")})
+        line.refresh_from_db()
+        self.assertIn("Shortage in transit: 5", line.remarks)
+        balance = StockBalance.objects.get(site=self.site2, item=self.item)
+        self.assertEqual(balance.quantity, Decimal("25.000"))
+
+
+class ReconcileStockBalancesTests(TestCase):
+    def test_corrects_drifted_balance(self):
+        from django.core.management import call_command
+        from stores.models import write_stock_ledger_entry
+
+        site = Site.objects.create(name="Hyderabad Factory 1", code="HYD-F1")
+        category = ItemCategory.objects.create(name="Cement")
+        item = Item.objects.create(name="OPC 53", category=category, unit=Item.Unit.BAG)
+        write_stock_ledger_entry(site=site, item=item, txn_date=datetime.date(2026, 1, 1), txn_type=StockLedger.TxnType.OPENING, qty=Decimal("50"))
+
+        # simulate drift: someone/something corrupted the cache
+        balance = StockBalance.objects.get(site=site, item=item)
+        balance.quantity = Decimal("999.000")
+        balance.save()
+
+        call_command("reconcile_stock_balances")
+        balance.refresh_from_db()
+        self.assertEqual(balance.quantity, Decimal("50.000"))
+
+    def test_no_drift_no_correction_reported(self):
+        from io import StringIO
+        from django.core.management import call_command
+        from stores.models import write_stock_ledger_entry
+
+        site = Site.objects.create(name="Hyderabad Factory 1", code="HYD-F1")
+        category = ItemCategory.objects.create(name="Cement")
+        item = Item.objects.create(name="OPC 53", category=category, unit=Item.Unit.BAG)
+        write_stock_ledger_entry(site=site, item=item, txn_date=datetime.date(2026, 1, 1), txn_type=StockLedger.TxnType.OPENING, qty=Decimal("50"))
+
+        out = StringIO()
+        call_command("reconcile_stock_balances", stdout=out)
+        self.assertIn("0 correction(s)", out.getvalue())
+
+
+class CheckMinStockTests(TestCase):
+    def setUp(self):
+        self.site = Site.objects.create(name="Hyderabad Factory 1", code="HYD-F1")
+        self.category = ItemCategory.objects.create(name="Cement")
+        self.item = Item.objects.create(name="OPC 53", category=self.category, unit=Item.Unit.BAG)
+        self.site_member = User.objects.create_user(username="siteuser", password="pass12345", email="siteuser@example.com")
+        self.site_member.groups.add(Group.objects.create(name="Site Member"))
+        self.site_member.profile.site = self.site
+        self.site_member.profile.save()
+        SiteItemSetting.objects.create(site=self.site, item=self.item, min_stock_qty=Decimal("50"))
+
+    def test_creates_draft_indent_when_below_minimum(self):
+        from django.core.management import call_command
+        from indents.models import Indent
+
+        call_command("check_min_stock")
+        indent = Indent.objects.filter(site=self.site, status=Indent.Status.DRAFT).first()
+        self.assertIsNotNone(indent)
+        self.assertEqual(indent.lines.first().item, self.item)
+
+    def test_notifies_site_members(self):
+        from django.core.management import call_command
+        from accounts_stub.models import Notification
+
+        call_command("check_min_stock")
+        self.assertTrue(Notification.objects.filter(recipient=self.site_member).exists())
+
+    def test_does_not_duplicate_on_second_run(self):
+        from django.core.management import call_command
+        from indents.models import Indent
+
+        call_command("check_min_stock")
+        call_command("check_min_stock")
+        self.assertEqual(Indent.objects.filter(site=self.site, status=Indent.Status.DRAFT).count(), 1)
+
+    def test_no_flag_when_stock_sufficient(self):
+        from django.core.management import call_command
+        from indents.models import Indent
+        from stores.models import write_stock_ledger_entry
+
+        write_stock_ledger_entry(site=self.site, item=self.item, txn_date=datetime.date(2026, 1, 1), txn_type=StockLedger.TxnType.OPENING, qty=Decimal("100"))
+        call_command("check_min_stock")
+        self.assertEqual(Indent.objects.filter(site=self.site).count(), 0)
+
+
+class ImportOpeningStockTests(TestCase):
+    def setUp(self):
+        self.site = Site.objects.create(name="Hyderabad Factory 1", code="HYD-F1")
+        self.category = ItemCategory.objects.create(name="Cement")
+        self.item = Item.objects.create(name="OPC 53", category=self.category, unit=Item.Unit.BAG)
+
+    def _write_csv(self, tmp_path, rows):
+        import csv
+        with open(tmp_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["site_code", "item", "qty", "rate"])
+            writer.writerows(rows)
+
+    def test_import_creates_opening_entry(self):
+        import tempfile
+        from django.core.management import call_command
+
+        with tempfile.NamedTemporaryFile(suffix=".csv", mode="w", delete=False) as tmp:
+            path = tmp.name
+        self._write_csv(path, [[self.site.code, self.item.code, "75", "10.50"]])
+
+        call_command("import_opening_stock", path)
+        balance = StockBalance.objects.get(site=self.site, item=self.item)
+        self.assertEqual(balance.quantity, Decimal("75.000"))
+
+    def test_reimport_is_idempotent(self):
+        import tempfile
+        from django.core.management import call_command
+
+        with tempfile.NamedTemporaryFile(suffix=".csv", mode="w", delete=False) as tmp:
+            path = tmp.name
+        self._write_csv(path, [[self.site.code, self.item.code, "75", "10.50"]])
+
+        call_command("import_opening_stock", path)
+        call_command("import_opening_stock", path)
+        self.assertEqual(StockLedger.objects.filter(txn_type=StockLedger.TxnType.OPENING).count(), 1)
+        balance = StockBalance.objects.get(site=self.site, item=self.item)
+        self.assertEqual(balance.quantity, Decimal("75.000"))
+
+
+class StockIssueViewTests(TestCase):
+    def setUp(self):
+        self.site = Site.objects.create(name="Hyderabad Factory 1", code="HYD-F1")
+        self.category = ItemCategory.objects.create(name="Cement")
+        self.item = Item.objects.create(name="OPC 53", category=self.category, unit=Item.Unit.BAG)
+        self.user = User.objects.create_user(username="siteuser", password="pass12345")
+        self.user.groups.add(Group.objects.create(name="Site Member"))
+        self.user.profile.site = self.site
+        self.user.profile.save()
+        self.client.login(username="siteuser", password="pass12345")
+        from stores.models import write_stock_ledger_entry
+        write_stock_ledger_entry(
+            site=self.site, item=self.item, txn_date=datetime.date(2026, 1, 1),
+            txn_type=StockLedger.TxnType.OPENING, qty=Decimal("50"),
+        )
+
+    def test_create_stock_issue_via_view(self):
+        response = self.client.get(reverse("stores:stock_issue_create"))
+        self.assertEqual(response.status_code, 200)
+
+        formset_data = {
+            "site": self.site.pk, "purpose": "production", "purpose_detail": "", "remarks": "",
+            "form-TOTAL_FORMS": "5", "form-INITIAL_FORMS": "0", "form-MIN_NUM_FORMS": "0", "form-MAX_NUM_FORMS": "1000",
+            "form-0-item": self.item.pk, "form-0-qty": "10", "form-0-remarks": "",
+            "form-1-item": "", "form-1-qty": "", "form-1-remarks": "",
+            "form-2-item": "", "form-2-qty": "", "form-2-remarks": "",
+            "form-3-item": "", "form-3-qty": "", "form-3-remarks": "",
+            "form-4-item": "", "form-4-qty": "", "form-4-remarks": "",
+        }
+        response = self.client.post(reverse("stores:stock_issue_create"), formset_data)
+        issue = StockIssue.objects.get(site=self.site)
+        self.assertRedirects(response, reverse("stores:stock_issue_detail", args=[issue.pk]))
+        self.assertEqual(issue.lines.count(), 1)
+
+    def test_submit_stock_issue_via_view_reduces_balance(self):
+        issue = StockIssue.objects.create(site=self.site, issued_by=self.user, purpose=StockIssue.Purpose.PRODUCTION)
+        StockIssueLine.objects.create(issue=issue, item=self.item, qty=Decimal("10"))
+        response = self.client.post(reverse("stores:stock_issue_submit", args=[issue.pk]))
+        self.assertRedirects(response, reverse("stores:stock_issue_detail", args=[issue.pk]))
+        balance = StockBalance.objects.get(site=self.site, item=self.item)
+        self.assertEqual(balance.quantity, Decimal("40.000"))
+
+    def test_stock_balance_list_view_renders(self):
+        response = self.client.get(reverse("stores:stock_balance_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "OPC 53")

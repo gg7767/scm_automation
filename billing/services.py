@@ -65,3 +65,41 @@ def payables_aging(site=None, category=None):
         rows.append({"bill": bill, "days_overdue": days_overdue, "bucket": bucket, "balance": balance})
 
     return {"buckets": buckets, "rows": rows, "total": sum(buckets.values(), Decimal("0.00"))}
+
+
+MATCHED_BILL_STATUSES = [
+    VendorBill.Status.APPROVED_FOR_PAYMENT, VendorBill.Status.PARTIALLY_PAID, VendorBill.Status.PAID,
+]
+
+
+def spend_analysis(group_by="vendor", date_from=None, date_to=None):
+    """Spend by category/site/vendor/month, from matched (not cancelled/
+    draft/mismatch) bills only — POs are commitments, bills are spend."""
+    from django.db.models import Sum
+    from django.db.models.functions import TruncMonth
+
+    qs = VendorBill.objects.filter(status__in=MATCHED_BILL_STATUSES)
+    if date_from:
+        qs = qs.filter(vendor_invoice_date__gte=date_from)
+    if date_to:
+        qs = qs.filter(vendor_invoice_date__lte=date_to)
+
+    if group_by == "vendor":
+        rows = qs.values("vendor__name").annotate(total=Sum("grand_total")).order_by("-total")
+        return [{"label": r["vendor__name"], "total": r["total"]} for r in rows]
+    if group_by == "site":
+        rows = qs.values("site__code").annotate(total=Sum("grand_total")).order_by("-total")
+        return [{"label": r["site__code"], "total": r["total"]} for r in rows]
+    if group_by == "month":
+        rows = (
+            qs.annotate(month=TruncMonth("vendor_invoice_date"))
+            .values("month").annotate(total=Sum("grand_total")).order_by("month")
+        )
+        return [{"label": r["month"].strftime("%b %Y"), "total": r["total"]} for r in rows]
+    if group_by == "category":
+        rows = (
+            qs.values("lines__po_line__item__category__name")
+            .annotate(total=Sum("lines__line_total")).order_by("-total")
+        )
+        return [{"label": r["lines__po_line__item__category__name"] or "—", "total": r["total"]} for r in rows]
+    raise ValueError(f"Unknown group_by '{group_by}'")

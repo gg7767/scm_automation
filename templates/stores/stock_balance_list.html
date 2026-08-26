@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Stock Balances &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-semibold text-slate-900">Current Stock</h1>
+    <a href="{% url 'stores:stock_issue_list' %}" class="px-4 py-2 rounded border border-slate-300 text-sm font-medium hover:bg-slate-50">Stock issues</a>
+</div>
+
+<form method="get" class="bg-white rounded-lg shadow p-4 mb-4 flex flex-wrap gap-3 items-end">
+    <div class="flex-1 min-w-[180px]">
+        <label class="block text-xs font-medium text-slate-500">Search item</label>
+        <input type="text" name="q" value="{{ q }}" class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+    </div>
+    <button type="submit" class="px-4 py-2 rounded bg-slate-200 text-slate-800 text-sm font-medium hover:bg-slate-300">Filter</button>
+</form>
+
+<div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-left text-slate-500">
+            <tr><th class="px-4 py-3">Site</th><th class="px-4 py-3">Item</th><th class="px-4 py-3">Quantity</th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+            {% for balance in balances %}
+            <tr>
+                <td class="px-4 py-3 font-medium text-slate-900">{{ balance.site.code }}</td>
+                <td class="px-4 py-3">{{ balance.item.name }}</td>
+                <td class="px-4 py-3">{{ balance.quantity }} {{ balance.item.get_unit_display }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="px-4 py-8 text-center text-slate-400">No stock movements yet.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% include "partials/_pagination.html" %}
+{% endblock %}

@@ -229,9 +229,12 @@ class VendorDetailView(MastersManagerRequiredMixin, DetailView):
     context_object_name = "vendor"
 
     def get_context_data(self, **kwargs):
+        from masters.services import vendor_performance_score
+
         ctx = super().get_context_data(**kwargs)
         ctx["document_form"] = VendorDocumentForm()
         ctx["rate_contract_form"] = RateContractForm()
+        ctx["performance"] = vendor_performance_score(self.object)
         return ctx
 
 

@@ -35,6 +35,21 @@
     </dl>
 </div>
 
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <h2 class="text-sm font-semibold text-slate-900 mb-3">Vendor performance score</h2>
+    {% if performance.score %}
+    <div class="text-2xl font-semibold text-slate-900 mb-3">{{ performance.score|floatformat:0 }} / 100</div>
+    {% else %}
+    <p class="text-sm text-slate-400 mb-3">Not enough history yet.</p>
+    {% endif %}
+    <dl class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+        <div><dt class="text-slate-500">On-time delivery</dt><dd class="font-medium">{% if performance.on_time_delivery_pct != None %}{{ performance.on_time_delivery_pct|floatformat:0 }}%{% else %}—{% endif %}</dd></div>
+        <div><dt class="text-slate-500">Short/damage rate</dt><dd class="font-medium">{% if performance.short_damage_pct != None %}{{ performance.short_damage_pct|floatformat:1 }}%{% else %}—{% endif %}</dd></div>
+        <div><dt class="text-slate-500">Rate-contract adherence</dt><dd class="font-medium">{% if performance.rate_contract_adherence_pct != None %}{{ performance.rate_contract_adherence_pct|floatformat:0 }}%{% else %}—{% endif %}</dd></div>
+        <div><dt class="text-slate-500">Bill mismatch rate</dt><dd class="font-medium">{% if performance.bill_mismatch_rate_pct != None %}{{ performance.bill_mismatch_rate_pct|floatformat:0 }}%{% else %}—{% endif %}</dd></div>
+    </dl>
+</div>
+
 <div class="bg-white rounded-lg shadow p-6">
     <h2 class="text-sm font-semibold text-slate-900 mb-3">Documents</h2>
 

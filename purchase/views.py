@@ -393,3 +393,12 @@ class VendorLedgerView(VendorLedgerViewRequiredMixin, DetailView):
         ctx["purchase_orders"] = visible_po_queryset(self.request.user, ledger["purchase_orders"])
         ctx["open_value"] = ledger["open_value"]
         return ctx
+
+
+class ProcurementLeadTimeView(POViewRequiredMixin, View):
+    template_name = "purchase/lead_time_report.html"
+
+    def get(self, request):
+        from purchase.services import procurement_lead_time
+        data = procurement_lead_time()
+        return render(request, self.template_name, data)

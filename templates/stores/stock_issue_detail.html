@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ issue.issue_number }} &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-semibold text-slate-900">{{ issue.issue_number }}</h1>
+    {% if issue.is_editable %}
+    <form method="post" action="{% url 'stores:stock_issue_submit' issue.pk %}" onsubmit="return confirm('Submit this stock issue? Stock levels will update immediately.');">
+        {% csrf_token %}
+        <button type="submit" class="px-4 py-3 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800">Submit</button>
+    </form>
+    {% endif %}
+</div>
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <dl class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+        <div><dt class="text-slate-500">Site</dt><dd class="font-medium">{{ issue.site.code }}</dd></div>
+        <div><dt class="text-slate-500">Purpose</dt><dd class="font-medium">{{ issue.get_purpose_display }}</dd></div>
+        <div><dt class="text-slate-500">Date</dt><dd class="font-medium">{{ issue.issue_date|date:"d-m-Y" }}</dd></div>
+    </dl>
+</div>
+<div class="bg-white rounded-lg shadow p-6">
+    <h2 class="text-sm font-semibold text-slate-900 mb-3">Items</h2>
+    <ul class="divide-y divide-slate-100 text-sm">
+        {% for line in issue.lines.all %}
+        <li class="py-2">{{ line.item.name }}: {{ line.qty }} {{ line.item.get_unit_display }} {% if line.remarks %}— {{ line.remarks }}{% endif %}</li>
+        {% empty %}<li class="py-2 text-slate-400">No items.</li>{% endfor %}
+    </ul>
+</div>
+{% endblock %}

@@ -5,8 +5,8 @@ from django.views.generic import DetailView, ListView, View
 
 from accounts_stub import roles
 from purchase.models import PurchaseOrder
-from stores.forms import GRNForm, GRNLineFormSet
-from stores.models import GRN, InvalidStatusTransition
+from stores.forms import GRNForm, GRNLineFormSet, StockIssueForm, StockIssueLineFormSet
+from stores.models import GRN, InvalidStatusTransition, StockBalance, StockIssue, StockIssueLine
 from stores.permissions import (
     GRNAccessRequiredMixin,
     GRNReversalRequiredMixin,
@@ -128,3 +128,90 @@ class GRNSubmitView(GRNAccessRequiredMixin, View):
         except InvalidStatusTransition as exc:
             messages.error(request, str(exc))
         return redirect("stores:grn_detail", pk=pk)
+
+
+# --- Inventory: stock balance, stock issue -------------------------------
+
+class StockBalanceListView(GRNViewRequiredMixin, ListView):
+    model = StockBalance
+    template_name = "stores/stock_balance_list.html"
+    context_object_name = "balances"
+    paginate_by = PAGE_SIZE
+
+    def get_queryset(self):
+        qs = visible_grn_queryset(self.request.user, StockBalance.objects.select_related("site", "item"))
+        q = self.request.GET.get("q", "").strip()
+        if q:
+            qs = qs.filter(item__name__icontains=q)
+        return qs.order_by("site__code", "item__name")
+
+
+class StockIssueListView(GRNAccessRequiredMixin, ListView):
+    model = StockIssue
+    template_name = "stores/stock_issue_list.html"
+    context_object_name = "issues"
+    paginate_by = PAGE_SIZE
+
+    def get_queryset(self):
+        return visible_grn_queryset(self.request.user, StockIssue.objects.select_related("site", "issued_by"))
+
+
+class StockIssueCreateView(GRNAccessRequiredMixin, View):
+    template_name = "stores/stock_issue_form.html"
+
+    def get(self, request):
+        kwargs = {}
+        if roles.is_site_restricted(request.user):
+            kwargs["restrict_site"] = roles.user_site(request.user)
+        form = StockIssueForm(**kwargs)
+        formset = StockIssueLineFormSet(queryset=StockIssueLine.objects.none())
+        return render(request, self.template_name, {"form": form, "formset": formset})
+
+    def post(self, request):
+        kwargs = {}
+        if roles.is_site_restricted(request.user):
+            kwargs["restrict_site"] = roles.user_site(request.user)
+        form = StockIssueForm(request.POST, **kwargs)
+        formset = StockIssueLineFormSet(request.POST, queryset=StockIssueLine.objects.none())
+        if form.is_valid() and formset.is_valid():
+            issue = form.save(commit=False)
+            issue.issued_by = request.user
+            issue.created_by = request.user
+            issue.save()
+            for line_form in formset:
+                if line_form.cleaned_data and line_form.cleaned_data.get("item"):
+                    line = line_form.save(commit=False)
+                    line.issue = issue
+                    line.created_by = request.user
+                    line.save()
+            messages.success(request, f"Draft stock issue {issue.issue_number} created.")
+            return redirect("stores:stock_issue_detail", pk=issue.pk)
+        return render(request, self.template_name, {"form": form, "formset": formset})
+
+
+class StockIssueDetailView(GRNAccessRequiredMixin, DetailView):
+    model = StockIssue
+    template_name = "stores/stock_issue_detail.html"
+    context_object_name = "issue"
+
+
+class StockIssueSubmitView(GRNAccessRequiredMixin, View):
+    def post(self, request, pk):
+        issue = get_object_or_404(StockIssue, pk=pk)
+        try:
+            issue.submit(request.user)
+            messages.success(request, f"{issue.issue_number} submitted.")
+        except InvalidStatusTransition as exc:
+            messages.error(request, str(exc))
+        return redirect("stores:stock_issue_detail", pk=pk)
+
+
+class SlowMovingStockView(GRNViewRequiredMixin, View):
+    template_name = "stores/slow_moving_stock.html"
+
+    def get(self, request):
+        from stores.services import slow_moving_items
+
+        days = int(request.GET.get("days", 60))
+        balances = slow_moving_items(days=days)
+        return render(request, self.template_name, {"balances": balances, "days": days})

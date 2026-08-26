@@ -30,4 +30,5 @@ urlpatterns = [
 
     path("vendors/", views.VendorLedgerListView.as_view(), name="vendor_ledger_list"),
     path("vendors/<int:pk>/ledger/", views.VendorLedgerView.as_view(), name="vendor_ledger"),
+    path("reports/lead-time/", views.ProcurementLeadTimeView.as_view(), name="lead_time_report"),
 ]

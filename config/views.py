@@ -23,3 +23,8 @@ def home(request):
             "overdue_pos": overdue_purchase_orders(request.user),
         })
     return render(request, "home.html", context)
+
+
+@login_required
+def help_page(request):
+    return render(request, "help.html")

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Issue stock &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="max-w-lg mx-auto bg-white rounded-lg shadow p-6">
+    <h1 class="text-lg font-semibold text-slate-900 mb-4">Issue stock</h1>
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        {% for field in form %}
+        <div>
+            {% if not field.is_hidden %}<label for="{{ field.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ field.label }}</label>{% endif %}
+            {{ field }}
+            {% for error in field.errors %}<p class="mt-1 text-xs text-red-600">{{ error }}</p>{% endfor %}
+        </div>
+        {% endfor %}
+
+        <h2 class="text-sm font-semibold text-slate-900 pt-2">Items</h2>
+        {{ formset.management_form }}
+        {% for line_form in formset %}
+        <div class="grid grid-cols-3 gap-2 items-end border-b pb-2">
+            <div><label class="block text-xs font-medium text-slate-500">Item</label>{{ line_form.item }}</div>
+            <div><label class="block text-xs font-medium text-slate-500">Qty</label>{{ line_form.qty }}</div>
+            <div><label class="block text-xs font-medium text-slate-500">Remarks</label>{{ line_form.remarks }}</div>
+        </div>
+        {% endfor %}
+
+        <div class="flex gap-3 pt-2">
+            <button type="submit" class="px-4 py-3 rounded bg-slate-900 text-white font-medium hover:bg-slate-800">Create draft</button>
+            <a href="{% url 'stores:stock_issue_list' %}" class="px-4 py-3 rounded border border-slate-300 text-slate-700 hover:bg-slate-50">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

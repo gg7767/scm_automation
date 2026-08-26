@@ -204,3 +204,70 @@ code + `docs/DEPLOYMENT.md`, not a live restore drill or real SMTP send.
   — so `GRNListView`/`GRNDetailView` specifically now use a separate
   `GRNViewRequiredMixin` that adds Accounts as read-only, while
   create/submit/reversal stay on the stricter mixin.
+
+## Phase 4: Inventory, transport, machinery, reporting, hardening
+
+- Stayed with the CLAUDE.md app list exactly (`stores` owns inventory,
+  `logistics` owns transport, `assets` owns machinery) rather than adding
+  a `reports` app for the reporting suite — each report's service
+  function/view lives in the app that owns its data (spend analysis in
+  `billing`, lead time in `purchase`, vendor score in `masters`, stock
+  reports in `stores`, freight in `logistics`, machinery utilisation in
+  `assets`); `accounts_stub` hosts the monthly-pack command since it
+  already owns cross-cutting email/notification infra.
+- `StockLedger` is genuinely append-only (no update/delete views exist);
+  `StockBalance` is a cache written in the same transaction as every
+  ledger entry via `write_stock_ledger_entry()`, the single choke point
+  every stock-moving action goes through. `reconcile_stock_balances`
+  recomputes the cache from the ledger nightly and reports drift —
+  this is also how `Phase 4 fills in stores.services.record_receipt`
+  (the Phase 2 no-op stub) without touching GRN code at all.
+  `MachineDeployment`'s "at most one open deployment per machine" rule
+  is a real partial `UniqueConstraint` (`condition=Q(to_date__isnull=True)`),
+  not just application-level validation.
+- Freight bills from transporters needed `VendorBill.po` to become
+  nullable and a new `transport_trips` M2M, with a 2-way match
+  (`_run_two_way_match_for_trips`, trip freight vs bill total) alongside
+  the existing 3-way PO/GRN/bill match — `submit_for_matching` branches
+  on whether the bill has a PO or trips. Found and fixed a real bug this
+  introduced: `_maybe_close_po` unconditionally did `self.po.refresh_from_db()`,
+  which crashes for a trip-based bill with no PO; guarded with an early
+  return. Trip-based bill entry is admin-only for now (no custom
+  front-end flow) — the PO-based path is the primary, high-frequency one
+  and already has full custom UI; this is a deliberate scope trim, not
+  an oversight.
+- Vendor performance score is shown on the vendor detail page as
+  specified; it is **not** wired into the PO vendor picker (`<select>`)
+  as the phase doc also asks for — doing that cleanly needs a custom
+  option-rendering widget, and this was cut for time. Documented here
+  rather than silently dropped.
+- Hired-machinery bills validating against `MachineLog` totals (the
+  phase doc's other 2-way match variant) was **not built** — only the
+  transport-trip 2-way match exists. `Machine`/`MachineDeployment`/
+  `MachineLog`/`MaintenanceSchedule` are otherwise complete (registration,
+  deployment history, usage logs, maintenance-due tracking).
+- Procurement lead time has no real "delivery complete" timestamp to
+  read (`PurchaseOrder.delivery_complete` is a plain boolean, set in
+  Phase 2) — approximated by the latest submitted GRN's `received_date`
+  for that PO. Lead time is only computed for POs with a `source_indent`
+  (indent-originated), per the phase doc's own stage definition
+  ("indent approved → PO sent → ..."); direct HO-created POs aren't
+  included in this particular report.
+- Vendor performance score and procurement lead time are both plain
+  Python loops over querysets rather than SQL aggregations (see
+  `docs/DEPLOYMENT.md` performance notes) — deliberate, given the actual
+  data volumes at this team's scale.
+- Stock issue's item lines use a plain `modelformset_factory` with
+  `extra=5` blank rows (no HTMX search-as-you-type), unlike PO/indent
+  lines — simpler to implement, and issue lines aren't pre-filled from
+  any source document the way GRN/bill lines are, so there was less
+  benefit from the fancier pattern.
+- In-app help (`/help/`) is text-only, no screenshots — screenshots
+  would need re-capturing by hand on every UI change with no automated
+  way to keep them in sync here, so a stale screenshot seemed worse than
+  none.
+- `docs/DEPLOYMENT.md` documents cron wiring, backup/restore commands,
+  and Tally connectivity options as a plan to execute, not a completed
+  operation — no cron has actually been scheduled, no backup has
+  actually been taken/restored, and no Tally gateway exists to connect
+  to, per the Phase 3 decision to skip Tally entirely.
