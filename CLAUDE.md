@@ -1,183 +1,172 @@
 # SCM Automation System — Precast Company
 
 This file is the project brief for Claude Code. Read it fully before making changes.
-It defines the domain, data model, conventions, and build order. Do not deviate from
-the data model without discussing it first.
+Detailed specs for later phases live in `docs/PHASE2_INDENTS_GRN.md`,
+`docs/PHASE3_BILLS_PAYMENTS_TALLY.md`, and `docs/PHASE4_INVENTORY_TRANSPORT_MACHINERY.md`.
+Read the relevant phase doc before building that phase. Do not deviate from the
+data models without discussing first.
 
 ## What this system is
 
 A supply chain management (SCM) web application for a precast concrete company,
 replacing paper and Excel for: indents, purchase orders, goods receipts, bills,
-and payments. Built and rolled out in phases. **We are currently building Phase 1:
-Vendor & Purchase Order module.**
+and payments.
 
 - Users: ~2 SCM team members at head office, ~2 members at each of 4–10 sites,
   plus accounts. Total ~10–25 users.
-- Site users will mostly be on mobile phones — every screen must work well on
-  a small screen.
+- Site users are mostly on mobile phones — every screen must work on a small screen.
 - Accounts runs Tally. This system is the source of truth for procurement;
-  approved bills will later be pushed to Tally as purchase vouchers (Phase 3).
-  Design GST and ledger-mapping fields with that in mind now.
-- Currency is INR. GST applies. Dates in DD-MM-YYYY for display.
+  approved bills are pushed to Tally as purchase vouchers (Phase 3).
+- Currency INR. GST applies. Display dates DD-MM-YYYY. Indian financial year Apr–Mar.
 
 ## Tech stack (fixed)
 
 - Python 3.12+, Django 5.x, PostgreSQL 16
-- Server-rendered Django templates + HTMX for interactivity. No React/SPA.
-- Tailwind CSS (via CDN or django-tailwind) for styling; clean, dense,
-  business-app look; large touch targets on mobile.
-- WeasyPrint for PO PDF generation.
-- Django's built-in auth with Groups for roles; django-simple-history (or
-  equivalent) for audit trails on all business models.
-- File uploads stored on local disk in dev (`MEDIA_ROOT`), S3-compatible
-  storage in production.
-- pytest + pytest-django for tests. Every workflow (PO approval, status
-  transitions) must have tests.
-- Single settings module with environment variables via django-environ.
-  Never commit secrets.
+- Server-rendered Django templates + HTMX. No React/SPA.
+- Tailwind CSS; clean, dense business-app look; large touch targets on mobile.
+- WeasyPrint for PDF generation (POs, GRNs, payment advices).
+- Django auth + Groups for roles; django-simple-history on all business models.
+- Uploads: local disk in dev, S3-compatible in production.
+- pytest + pytest-django. Every status transition and computation has tests.
+- Settings via django-environ. Never commit secrets.
 
 ## Roles (Django groups)
 
 | Role | Can do |
 |---|---|
-| SCM Head | Everything, final approver above threshold |
-| Purchase Officer (HO) | Manage masters, create/send POs, approve below threshold |
-| Site Member | View POs for their site; (Phase 2: raise indents, log GRNs) |
-| Accounts | Read-only on POs and vendor ledger; (Phase 3: bills & payments) |
-| Admin | User management, approval rules, settings |
+| SCM Head | Everything; final approver above threshold |
+| Purchase Officer (HO) | Masters, POs, approvals below threshold, indent conversion |
+| Site Member | Raise indents, log GRNs, view POs/stock for own site |
+| Accounts | Bills, 3-way match review, payments, Tally sync, read-only POs |
+| Admin | Users, approval rules, settings |
 
-Every user is optionally linked to a Site. Site members only see data for
-their own site.
+Users are optionally linked to a Site; site members only see their own site's data.
 
-## Phase 1 data model
+## Apps
 
-Create these Django models (app names in parentheses). All models get
-`created_at`, `updated_at`, `created_by`, and history tracking.
+- `masters` — Site, Vendor, ItemCategory, Item(+aliases), RateContract
+- `purchase` — PurchaseOrder(+lines), ApprovalRule, attachments
+- `indents` — Indent(+lines) (Phase 2)
+- `stores` — GRN(+lines), StockLedger, StockIssue (Phases 2 & 4)
+- `billing` — VendorBill(+lines), Payment, TallySyncLog (Phase 3)
+- `logistics` — TransportTrip (Phase 4)
+- `assets` — Machine, MachineDeployment, MachineLog (Phase 4)
 
-### masters app
+## Phase 1 data model (masters + purchase)
 
-**Site**
-- name, code (short unique code e.g. "HYD-F1"), address, is_factory (bool), active
+All models get created_at, updated_at, created_by, and history tracking.
 
-**Vendor**
-- name, code (auto e.g. VEN-0001), gstin (validated format, optional for
-  unregistered), pan, address, state (for GST place-of-supply),
-  contact_person, phone, email
-- bank_name, account_number, ifsc
-- payment_terms_days (int, e.g. 30), categories (M2M to ItemCategory)
-- tally_ledger_name (char, nullable — mapping for Phase 3 sync)
-- status: choices [active, on_hold, blacklisted]
-- documents: separate VendorDocument model (file, label)
+**Site**: name, code (unique, e.g. HYD-F1), address, is_factory, active
 
-**ItemCategory**
-- name (e.g. Cement, Steel, Aggregates, Admixtures, Hardware, Machinery Hire,
-  Transport), parent (nullable, for one level of nesting)
+**Vendor**: name, code (auto VEN-0001), gstin (validated, optional), pan, address,
+state, contact_person, phone, email, bank_name, account_number, ifsc,
+payment_terms_days, categories (M2M ItemCategory), tally_ledger_name (nullable),
+status [active, on_hold, blacklisted]. VendorDocument(file, label).
 
-**Item**
-- code (auto e.g. ITM-00001), name (canonical, unique), category (FK),
-- unit (choices: BAG, KG, MT, NOS, CUM, SQM, LTR, TRIP, HOUR, DAY, SET),
-- gst_rate (decimal %, e.g. 18.00), hsn_code (char, nullable), active
-- aliases: separate ItemAlias model (alias_name) — used to map messy legacy
-  Excel names to canonical items during data import
+**ItemCategory**: name, parent (nullable, one level)
 
-**RateContract**
-- vendor (FK), item (FK), rate (decimal), valid_from, valid_to, remarks
-- unique constraint on (vendor, item, valid_from)
-- helper: `current_rate(vendor, item)` returns active contract rate or None
+**Item**: code (auto ITM-00001), name (canonical, unique), category,
+unit [BAG, KG, MT, NOS, CUM, SQM, LTR, TRIP, HOUR, DAY, SET],
+gst_rate, hsn_code (nullable), active. ItemAlias(alias_name) for legacy names.
 
-### purchase app
+**RateContract**: vendor, item, rate, valid_from, valid_to, remarks;
+unique (vendor, item, valid_from); helper current_rate(vendor, item).
 
-**PurchaseOrder**
-- po_number (auto: PO/{site.code}/{FY}/{seq} e.g. PO/HYD-F1/26-27/0042;
-  FY = Indian financial year Apr–Mar)
-- vendor (FK), site (FK, delivery location), project_name (char, optional),
-- status: choices [draft, pending_approval, approved, sent, partially_delivered,
-  closed, cancelled] — enforce transitions in model methods, never by direct
-  status assignment in views
-- terms: payment_terms_days (defaulted from vendor, editable),
-  delivery_terms (text), remarks (text)
-- expected_delivery_date
-- totals: subtotal, gst_amount, grand_total — computed, stored, recomputed on
-  line changes
-- approved_by, approved_at, sent_at, sent_via (choices: email, whatsapp, manual)
-- amendment tracking: revision_number (int, starts 0); any edit after approval
-  requires creating a revision and re-approval
+**PurchaseOrder**: po_number (auto PO/{site.code}/{FY}/{seq}), vendor, site,
+project_name, status [draft, pending_approval, approved, sent,
+partially_delivered, closed, cancelled] — transitions only via model methods,
+source_indent (FK Indent, nullable — set in Phase 2), payment_terms_days,
+delivery_terms, remarks, expected_delivery_date, subtotal, gst_amount,
+grand_total (computed+stored), approved_by/at, sent_at,
+sent_via [email, whatsapp, manual], revision_number (edits after approval
+create a revision and require re-approval).
 
-**PurchaseOrderLine**
-- po (FK), item (FK), description_override (char, optional), quantity, unit
-  (copied from item), rate, gst_rate (copied from item, editable),
-  line_total (computed)
-- rate_flag: if a RateContract exists and entered rate differs, mark
-  `deviates_from_contract=True` and show a warning badge
+**PurchaseOrderLine**: po, item, description_override, quantity, unit, rate,
+gst_rate, line_total, deviates_from_contract flag,
+qty_received (Decimal, default 0 — updated by GRNs in Phase 2).
 
-**ApprovalRule**
-- min_amount, max_amount (nullable = no cap), approver_role (FK to Group)
-- Engine: on submit, find the matching rule for grand_total; users holding
-  that role (or SCM Head) can approve. Keep it table-driven and simple.
+**ApprovalRule**: min_amount, max_amount (nullable), approver_role.
+On submit, match rule by grand_total; that role or SCM Head can approve.
+Reused for indents and bills with a doc_type field
+[po, indent, bill].
 
-**POAttachment**
-- po (FK), file, label (e.g. "Vendor quotation")
+**POAttachment**: po, file, label.
 
 ## Phase 1 workflows
 
-1. **Masters CRUD** — vendors, items, categories, sites, rate contracts.
-   Use Django admin for Admin role, plus clean front-end list/detail/edit
-   pages for Purchase Officers (search, filters, pagination).
-2. **PO lifecycle** — create draft (line items with item search-as-you-type
-   via HTMX, rates auto-filled from rate contract), submit for approval,
-   approve/reject with comment, generate PDF on letterhead, mark as sent
-   (log channel), amend with revision + re-approval, cancel with reason.
-3. **PO PDF** — professional A4 layout: company letterhead placeholder,
-   vendor & delivery details, line table with GST breakup (CGST/SGST if
-   vendor state == company state, else IGST), amount in words (Indian
-   numbering: lakh/crore), terms, authorized signatory block.
-4. **Vendor ledger (lite)** — per vendor: list of POs with status and value;
-   total open PO value. (True ledger with bills/payments arrives in Phase 3.)
-5. **Dashboard (lite)** — pending approvals (for the logged-in approver),
-   recent POs, PO count/value this month, POs past expected delivery date.
-6. **Legacy data import** — management command to import vendors and items
-   from CSV (exported from existing Excel), using ItemAlias for name mapping.
-   Import must be idempotent (re-running does not duplicate).
+1. Masters CRUD (admin + front-end list/detail/edit with search, filters,
+   pagination).
+2. PO lifecycle: draft with HTMX line editing and rate-contract autofill →
+   submit → approve/reject with comment → PDF on letterhead → mark sent →
+   amendments (revision + re-approval) → cancel with reason.
+3. PO PDF: A4, letterhead placeholder, vendor & delivery blocks, line table
+   with CGST/SGST vs IGST (by vendor state vs company state), amount in words
+   (Indian lakh/crore), terms, signatory block.
+4. Vendor ledger (lite): POs per vendor with status and value; open PO total.
+5. Dashboard (lite): my pending approvals, recent POs, month PO count/value,
+   POs past expected delivery.
+6. Legacy CSV import (vendors, items via aliases), idempotent management command.
 
-## Conventions Claude Code must follow
+## Conventions
 
-- Fat models / thin views: status transitions, numbering, and total
-  computation live on models or service functions, covered by tests.
-- Use Django messages framework for user feedback; never silent failures.
-- All money as Decimal; never float. Quantities as Decimal(12,3).
-- Every list view: search + filter + pagination. Every destructive or
-  state-changing action: POST with confirmation.
-- Permissions checked server-side on every view (mixins/decorators), not
-  just hidden buttons.
-- Migrations must always be committed. Seed data (units, categories, a demo
-  site, approval rules) via a management command `seed_demo`.
-- Write tests alongside each feature, not at the end.
-- Keep a `docs/DECISIONS.md` log — one line per notable design decision.
+- Fat models / thin views; transitions, numbering, totals in model/service
+  functions with tests.
+- Money and quantities as Decimal, never float. Quantities Decimal(12,3).
+- Every list view: search + filter + pagination. Every state change: POST
+  with confirmation. Django messages for feedback.
+- Server-side permission checks on every view.
+- Migrations always committed. `seed_demo` management command for units,
+  categories, demo site, approval rules, demo users per role.
+- Tests written alongside each feature.
+- Keep `docs/DECISIONS.md` — one line per notable design decision.
+- Document numbering: all docs follow {PREFIX}/{site.code}/{FY}/{seq}
+  (PO, IND, GRN, BILL, PAY) with per-site-per-FY sequences generated
+  race-safely (select_for_update on a Sequence table).
 
-## Later phases (do NOT build yet, but don't block them)
+## Full build order
 
-- Phase 2: Indent model (site → HO), indent-to-PO conversion, GRN against PO
-  lines with challan photo upload, partial deliveries updating PO status.
-- Phase 3: VendorBill, 3-way match (PO vs GRN vs bill within tolerance),
-  payment recording, payables aging, Tally push (XML over HTTP gateway;
-  fallback CSV) using `tally_ledger_name` mapping.
-- Phase 4: Inventory per site, transport trips & freight, machinery/asset
-  register, richer dashboards & exports.
+Work through these strictly one at a time. Stop after each step for review.
 
-## Build order (work through these one at a time)
-
-1. Project scaffold: Django project, apps (masters, purchase, accounts_stub),
-   auth, roles/groups, base template with responsive nav, settings via env,
-   PostgreSQL, pytest wiring, seed_demo command.
-2. Masters: Site, ItemCategory, Item (+aliases), Vendor (+documents) —
-   models, admin, front-end CRUD, tests.
+**Phase 1 — Vendors & POs**
+1. Scaffold: project, apps, auth, roles, base responsive template, env
+   settings, PostgreSQL, pytest, seed_demo. ✅ (done)
+2. Masters: Site, ItemCategory, Item(+aliases), Vendor(+documents) — models,
+   admin, front-end CRUD, tests.
 3. RateContract + current-rate lookup.
-4. PurchaseOrder + lines: models, numbering, totals, status machine, tests.
-5. PO create/edit UI with HTMX line editing and rate-contract autofill.
-6. Approval flow: ApprovalRule engine, submit/approve/reject UI, pending-
-   approvals dashboard widget.
-7. PO PDF generation + mark-as-sent.
-8. Amendments (revisions) + cancellation.
+4. PurchaseOrder + lines: numbering, totals, status machine, tests.
+5. PO create/edit UI (HTMX lines, rate autofill).
+6. Approval engine + submit/approve/reject UI + pending-approvals widget.
+7. PO PDF + mark-as-sent.
+8. Amendments + cancellation.
 9. Vendor ledger (lite) + dashboard (lite).
-10. CSV import command for legacy vendors/items; polish, permissions audit,
-    deployment notes (gunicorn + nginx or Railway/Render, daily pg_dump backup).
+10. Legacy CSV import; permissions audit; deployment notes + backup script.
+
+**Phase 2 — Indents & GRN** (read docs/PHASE2_INDENTS_GRN.md first)
+11. Indent + lines: models, numbering, status machine, tests.
+12. Site-side indent UI (mobile-first) + approval flow (reuse engine).
+13. Indent → PO conversion (single or merged; partial quantities).
+14. GRN + lines: models, qty validation against PO, PO status updates, tests.
+15. GRN UI (mobile-first) with challan photo upload; short/excess/damage flags.
+16. Pending-deliveries and indent-status dashboards; PO closure rules.
+
+**Phase 3 — Bills, payments & Tally** (read docs/PHASE3_BILLS_PAYMENTS_TALLY.md first)
+17. VendorBill + lines: models, numbering, status machine, tests.
+18. Bill entry UI with PO/GRN pickers; attachment of invoice scan.
+19. 3-way match engine with tolerances; mismatch review screen.
+20. Payments: record against bills (full/partial/advance), vendor ledger (full),
+    payables aging.
+21. Tally XML export/push + TallySyncLog + retry; ledger-name mapping screen.
+22. Accounts dashboard; debit notes for short/damaged quantities.
+
+**Phase 4 — Inventory, transport, machinery** (read docs/PHASE4_INVENTORY_TRANSPORT_MACHINERY.md first)
+23. StockLedger driven by GRNs; opening balances import.
+24. StockIssue (consumption) + inter-site transfer; min-stock alerts → draft
+    indents.
+25. TransportTrip: vehicle, route, linked PO/GRN or element delivery, freight
+    cost; freight report.
+26. Machine, MachineDeployment (which machine at which site), MachineLog
+    (fuel/hours), maintenance due alerts.
+27. Reporting suite: spend by category/site/vendor, lead-time report, vendor
+    performance score, monthly Excel exports.
+28. Hardening: permissions audit, backup/restore drill, performance pass,
+    user manual pages.

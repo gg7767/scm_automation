@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Raise indent &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="max-w-lg mx-auto bg-white rounded-lg shadow p-6">
+    <h1 class="text-lg font-semibold text-slate-900 mb-4">Raise indent</h1>
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        {% for field in form %}
+        <div>
+            {% if field.name != "site" or not field.is_hidden %}
+            <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ field.label }}</label>
+            {% endif %}
+            {{ field }}
+            {% for error in field.errors %}<p class="mt-1 text-xs text-red-600">{{ error }}</p>{% endfor %}
+        </div>
+        {% endfor %}
+        <div class="flex gap-3 pt-2">
+            <button type="submit" class="px-4 py-3 rounded bg-slate-900 text-white font-medium hover:bg-slate-800">Create draft</button>
+            <a href="{% url 'indents:indent_list' %}" class="px-4 py-3 rounded border border-slate-300 text-slate-700 hover:bg-slate-50">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -49,6 +49,11 @@ INSTALLED_APPS = [
     "masters",
     "purchase",
     "accounts_stub",
+    "indents",
+    "stores",
+    "billing",
+    "logistics",
+    "assets",
 ]
 
 MIDDLEWARE = [
@@ -146,3 +151,21 @@ COMPANY_NAME = env("COMPANY_NAME", default="Precast Co. Pvt. Ltd.")
 COMPANY_ADDRESS = env("COMPANY_ADDRESS", default="Plot 1, Industrial Area, Hyderabad, Telangana")
 COMPANY_GSTIN = env("COMPANY_GSTIN", default="")
 COMPANY_STATE = env("COMPANY_STATE", default="TG")
+
+# Email (urgent-indent alerts, maintenance/min-stock alerts, monthly SCM
+# pack). Defaults to the console backend so nothing is silently swallowed in
+# dev; point EMAIL_HOST etc. at a real SMTP server in production via env.
+EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
+EMAIL_HOST = env("EMAIL_HOST", default="")
+EMAIL_PORT = env.int("EMAIL_PORT", default=587)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="scm-automation@example.com")
+
+# Business-policy settings (Phase 2-4) — tune per company without code changes.
+GRN_OVER_RECEIPT_TOLERANCE_PERCENT = env.float("GRN_OVER_RECEIPT_TOLERANCE_PERCENT", default=2.0)
+BILL_MATCH_QTY_TOLERANCE_PERCENT = env.float("BILL_MATCH_QTY_TOLERANCE_PERCENT", default=0.0)
+BILL_MATCH_RATE_TOLERANCE_PERCENT = env.float("BILL_MATCH_RATE_TOLERANCE_PERCENT", default=0.0)
+BILL_MATCH_TOTAL_TOLERANCE_RUPEES = env.float("BILL_MATCH_TOTAL_TOLERANCE_RUPEES", default=1.0)
+ALLOW_NEGATIVE_STOCK = env.bool("ALLOW_NEGATIVE_STOCK", default=False)

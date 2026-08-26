@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}{{ grn.grn_number }} &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <div>
+        <h1 class="text-xl font-semibold text-slate-900">
+            {{ grn.grn_number }}{% if grn.is_reversal %} <span class="text-red-600 text-sm">(reversal)</span>{% endif %}
+        </h1>
+        <div class="mt-1">
+            {% if grn.status == "draft" %}<span class="px-2 py-1 rounded bg-slate-100 text-slate-600 text-xs">Draft</span>
+            {% else %}<span class="px-2 py-1 rounded bg-green-50 text-green-700 text-xs">Submitted</span>{% endif %}
+        </div>
+    </div>
+    {% if grn.is_editable %}
+    <form method="post" action="{% url 'stores:grn_submit' grn.pk %}" onsubmit="return confirm('Submit this GRN? It cannot be edited afterwards — corrections need a reversal GRN.');">
+        {% csrf_token %}
+        <button type="submit" class="px-4 py-3 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800">Submit GRN</button>
+    </form>
+    {% endif %}
+</div>
+
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <dl class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+        <div><dt class="text-slate-500">PO</dt><dd class="font-medium">{{ grn.po.po_number }}</dd></div>
+        <div><dt class="text-slate-500">Site</dt><dd class="font-medium">{{ grn.site.code }}</dd></div>
+        <div><dt class="text-slate-500">Received date</dt><dd class="font-medium">{{ grn.received_date|date:"d-m-Y" }}</dd></div>
+        <div><dt class="text-slate-500">Challan number</dt><dd class="font-medium">{{ grn.challan_number }}</dd></div>
+        <div><dt class="text-slate-500">Challan date</dt><dd class="font-medium">{{ grn.challan_date|date:"d-m-Y" }}</dd></div>
+        <div><dt class="text-slate-500">Vehicle</dt><dd class="font-medium">{{ grn.vehicle_number|default:"—" }}</dd></div>
+        <div class="sm:col-span-3"><dt class="text-slate-500">Challan photo</dt><dd class="font-medium"><a href="{{ grn.challan_photo.url }}" target="_blank" class="text-slate-700 hover:underline">View photo</a></dd></div>
+        <div class="sm:col-span-3"><dt class="text-slate-500">Remarks</dt><dd class="font-medium">{{ grn.remarks|default:"—" }}</dd></div>
+    </dl>
+</div>
+
+<div class="bg-white rounded-lg shadow p-6">
+    <h2 class="text-sm font-semibold text-slate-900 mb-3">Items</h2>
+    <form method="post" action="{% url 'stores:grn_lines_update' grn.pk %}">
+        {% csrf_token %}
+        {{ formset.management_form }}
+        <div class="overflow-x-auto mb-4">
+            <table class="w-full text-sm">
+                <thead class="text-left text-slate-500">
+                    <tr>
+                        <th class="py-2 pr-3">Item</th>
+                        <th class="py-2 pr-3">Ordered</th>
+                        <th class="py-2 pr-3">Received</th>
+                        <th class="py-2 pr-3">Accepted</th>
+                        <th class="py-2 pr-3">Rejected</th>
+                        <th class="py-2">Rejection reason</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for form in formset %}
+                    <tr>
+                        <td class="py-2 pr-3">{{ form.instance.po_line.item.name }}
+                            {{ form.id }}</td>
+                        <td class="py-2 pr-3">{{ form.instance.po_line.quantity }}</td>
+                        <td class="py-2 pr-3">
+                            {% if grn.is_editable %}{{ form.qty_received }}{% else %}{{ form.instance.qty_received }}{% endif %}
+                        </td>
+                        <td class="py-2 pr-3">
+                            {% if grn.is_editable %}{{ form.qty_accepted }}{% else %}{{ form.instance.qty_accepted }}{% endif %}
+                        </td>
+                        <td class="py-2 pr-3">
+                            {% if grn.is_editable %}{{ form.qty_rejected }}{% else %}{{ form.instance.qty_rejected }}{% endif %}
+                        </td>
+                        <td class="py-2">
+                            {% if grn.is_editable %}{{ form.rejection_reason }}{% else %}{{ form.instance.rejection_reason|default:"—" }}{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if grn.is_editable %}
+        <button type="submit" class="px-4 py-3 rounded border border-slate-300 text-sm font-medium hover:bg-slate-50">Save quantities</button>
+        {% endif %}
+    </form>
+</div>
+{% endblock %}

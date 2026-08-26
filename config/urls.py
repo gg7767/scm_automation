@@ -16,6 +16,8 @@ urlpatterns = [
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("masters/", include("masters.urls")),
     path("purchase/", include("purchase.urls")),
+    path("indents/", include("indents.urls")),
+    path("stores/", include("stores.urls")),
 ]
 
 if settings.DEBUG:

@@ -14,8 +14,12 @@
                 <a href="{% url 'home' %}" class="font-semibold text-lg tracking-tight">SCM Automation</a>
 
                 {% if user.is_authenticated %}
-                {% if is_masters_manager or can_view_po %}
+                {% if is_masters_manager or can_view_po or can_access_indents %}
                 <div class="hidden sm:flex items-center gap-1 text-sm ml-6 mr-auto">
+                    {% if can_access_indents %}
+                    <a href="{% url 'indents:indent_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Indents</a>
+                    <a href="{% url 'stores:grn_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">GRNs</a>
+                    {% endif %}
                     {% if can_view_po %}
                     <a href="{% url 'purchase:po_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Purchase Orders</a>
                     {% endif %}
@@ -49,6 +53,10 @@
 
             {% if user.is_authenticated %}
             <div id="nav-menu" class="hidden sm:hidden pb-4 flex flex-col gap-2 text-sm">
+                {% if can_access_indents %}
+                <a href="{% url 'indents:indent_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Indents</a>
+                <a href="{% url 'stores:grn_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">GRNs</a>
+                {% endif %}
                 {% if can_view_po %}
                 <a href="{% url 'purchase:po_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Purchase Orders</a>
                 {% endif %}

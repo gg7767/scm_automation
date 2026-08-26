@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Convert {{ indent.indent_number }} &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto bg-white rounded-lg shadow p-6">
+    <h1 class="text-lg font-semibold text-slate-900 mb-1">Convert {{ indent.indent_number }} to PO</h1>
+    <p class="text-sm text-slate-500 mb-4">Choose a vendor and how much of each open item to order now. Leave a quantity blank to skip that item this time.</p>
+
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <div>
+            <label class="block text-sm font-medium text-slate-700">Vendor</label>
+            <select name="vendor" required class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-3 text-base">
+                <option value="">---------</option>
+                {% for v in vendors %}
+                <option value="{{ v.pk }}">{{ v.code }} — {{ v.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="text-left text-slate-500">
+                    <tr>
+                        <th class="py-2 pr-3">Item</th>
+                        <th class="py-2 pr-3">Ordered so far</th>
+                        <th class="py-2 pr-3">Remaining</th>
+                        <th class="py-2">Order now</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for line in open_lines %}
+                    <tr>
+                        <td class="py-2 pr-3">{{ line.item.name }}</td>
+                        <td class="py-2 pr-3">{{ line.qty_ordered }} {{ line.get_unit_display }}</td>
+                        <td class="py-2 pr-3">{{ line.remaining_quantity }} {{ line.get_unit_display }}</td>
+                        <td class="py-2">
+                            <input type="number" step="0.001" name="qty_{{ line.pk }}" placeholder="0"
+                                   class="w-28 rounded border-slate-300 shadow-sm px-2 py-2 text-sm">
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="py-4 text-slate-400">No open items left to convert.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="flex gap-3 pt-2">
+            <button type="submit" class="px-4 py-3 rounded bg-slate-900 text-white font-medium hover:bg-slate-800">Create draft PO</button>
+            <a href="{% url 'indents:indent_detail' indent.pk %}" class="px-4 py-3 rounded border border-slate-300 text-slate-700 hover:bg-slate-50">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

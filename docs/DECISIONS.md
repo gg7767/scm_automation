@@ -100,3 +100,57 @@ One line per notable decision, most recent last.
   and the vendor-detail "PO ledger" link now gate on a matching
   `can_view_vendor_ledgers` context flag instead of the broader
   `can_view_po`.
+
+## Phase 2+ scope decisions (made in chat, not in CLAUDE.md)
+
+Before building Phases 2-4, the user chose: skip Tally sync entirely (no
+XML/CSV export/push code, just the existing `tally_ledger_name` field),
+exact-match (0% tolerance) 3-way matching for bills, a full stock ledger
+with consumption tracking in Phase 4, and both Excel + PDF exports for
+reports. Infra-dependent Phase 4 items (cron, email, backups) get real
+code + `docs/DEPLOYMENT.md`, not a live restore drill or real SMTP send.
+
+- Document numbering (`PO/`, `IND/`, `GRN/`, ...) was generalized from
+  `purchase/numbering.py` into `masters/numbering.py`
+  (`generate_document_number(model, field_name, prefix, scope_code, on_date)`);
+  `purchase.numbering.generate_po_number` is now a thin wrapper so existing
+  imports/tests didn't need to change.
+- `ApprovalRule` gained a `doc_type` [po, indent, bill] field (default
+  `po`, so existing PO call sites are unaffected) instead of a separate
+  rule table per document type — one engine, one admin screen, reused by
+  indents (Phase 2) and bills (Phase 3).
+- `Notification` (recipient, subject, body, channel, sent_at) lives in
+  `accounts_stub` — logs every alert and actually sends email (console
+  backend in dev); WhatsApp/SMS channels are logged only, no gateway yet,
+  per the phase doc's "schema ready, gateway later" instruction.
+- New apps `indents`, `stores`, `billing`, `logistics`, `assets` match the
+  CLAUDE.md app list exactly (Phase 2: indents + stores/GRN; Phase 3:
+  billing; Phase 4: stores/inventory + logistics + assets).
+- Indent→PO conversion: `PurchaseOrderLine.indent_line` (nullable FK) and
+  `indent_qty_recorded` track how much of a line has already been rolled
+  onto its indent line. Rollup only happens in `PurchaseOrder.approve()`
+  (delta-based: `quantity - indent_qty_recorded`), never at PO creation —
+  matches the phase doc ("on PO approval, increment qty_ordered") and
+  makes `amend()` + re-approve safe against double-counting.
+- Indent estimated value (for `ApprovalRule` routing, since indents carry
+  no money) uses the latest rate contract for the item across *any*
+  vendor, falling back to the most recent `PurchaseOrderLine.rate` for
+  that item, then 0 — this is an estimate only and is always labelled as
+  such in the UI.
+- `PurchaseOrder.delivery_complete` is a plain boolean set by
+  `refresh_delivery_status()` (called from GRN submission), not a new
+  status value — status still only reaches `partially_delivered` on any
+  receipt (matching the phase doc literally); actual PO `closed` still
+  only happens via the existing manual `close()` (or, from Phase 3
+  onward, once billing completes too).
+- GRN corrections are a second GRN with `is_reversal=True` (negative
+  quantities, HO-only), not an edit to a submitted GRN — submitted GRNs
+  are immutable per the phase doc. The over-receipt tolerance check
+  (default 2%, `GRN_OVER_RECEIPT_TOLERANCE_PERCENT`) is skipped entirely
+  for reversals.
+- Rejected GRN quantities create a `DebitNoteCandidate` automatically
+  (grn_line, qty, reason, resolved) — a placeholder Phase 3 will turn
+  into a real `DebitNote` or resolve/waive.
+- `stores.services.record_receipt(grn)` is a deliberate no-op stub today;
+  Phase 4 fills it in to write `StockLedger` entries, so GRN submission
+  code never needs to change when that lands.

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Record delivery &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="max-w-lg mx-auto bg-white rounded-lg shadow p-6">
+    <h1 class="text-lg font-semibold text-slate-900 mb-1">
+        {% if is_reversal %}Reversal GRN{% else %}Record delivery{% endif %}
+    </h1>
+    <p class="text-sm text-slate-500 mb-4">Against {{ po.po_number }} — {{ po.vendor.name }} ({{ po.site.code }})</p>
+
+    <form method="post" enctype="multipart/form-data" class="space-y-4">
+        {% csrf_token %}
+        <input type="hidden" name="po" value="{{ po.pk }}">
+        {% if is_reversal %}
+        <div>
+            <label class="block text-sm font-medium text-slate-700">Original GRN to correct</label>
+            <select name="reverses" class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-3 text-base">
+                {% for g in po.grns.all %}
+                {% if g.status == "submitted" and not g.is_reversal %}
+                <option value="{{ g.pk }}">{{ g.grn_number }} ({{ g.challan_number }})</option>
+                {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        {% for field in form %}
+        <div>
+            <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ field.label }}</label>
+            {{ field }}
+            {% for error in field.errors %}<p class="mt-1 text-xs text-red-600">{{ error }}</p>{% endfor %}
+        </div>
+        {% endfor %}
+        <div class="flex gap-3 pt-2">
+            <button type="submit" class="px-4 py-3 rounded bg-slate-900 text-white font-medium hover:bg-slate-800">Continue</button>
+            <a href="{% url 'stores:po_picker' %}" class="px-4 py-3 rounded border border-slate-300 text-slate-700 hover:bg-slate-50">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

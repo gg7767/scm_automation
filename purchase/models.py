@@ -35,6 +35,13 @@ class PurchaseOrder(TimeStampedModel):
     site = models.ForeignKey(Site, on_delete=models.PROTECT, related_name="purchase_orders")
     project_name = models.CharField(max_length=255, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    source_indent = models.ForeignKey(
+        "indents.Indent", null=True, blank=True, on_delete=models.SET_NULL, related_name="purchase_orders"
+    )
+    delivery_complete = models.BooleanField(
+        default=False, editable=False,
+        help_text="All lines fully received per GRNs; set by stores app, not by PO status alone.",
+    )
 
     payment_terms_days = models.PositiveIntegerField(default=30)
     delivery_terms = models.TextField(blank=True)
@@ -113,6 +120,16 @@ class PurchaseOrder(TimeStampedModel):
         self.save(update_fields=["status", "approved_by", "approved_at", "updated_at"])
         self.approval_actions.create(action=POApprovalAction.Action.APPROVED, actor=user, comment=comment)
 
+        for line in self.lines.select_related("indent_line"):
+            if line.indent_line_id:
+                # Delta-based: an amend()+re-approve cycle must not double-count
+                # qty_ordered on the indent line if it's approved more than once.
+                delta = line.quantity - line.indent_qty_recorded
+                if delta != 0:
+                    line.indent_line.record_conversion(delta)
+                    line.indent_qty_recorded = line.quantity
+                    line.save(update_fields=["indent_qty_recorded", "updated_at"])
+
     def reject(self, user, comment=""):
         if self.status != self.Status.PENDING_APPROVAL:
             raise InvalidStatusTransition(f"Cannot reject a PO in '{self.status}' status.")
@@ -147,6 +164,28 @@ class PurchaseOrder(TimeStampedModel):
         self.cancelled_reason = reason
         self.save(update_fields=["status", "cancelled_by", "cancelled_at", "cancelled_reason", "updated_at"])
 
+    def refresh_delivery_status(self):
+        """Called by the stores app after a GRN is submitted. Moves SENT ->
+        PARTIALLY_DELIVERED on first receipt and flags delivery_complete once
+        every line is fully received — the PO itself still only closes via
+        `close()` (post-billing in Phase 3), per docs/PHASE2_INDENTS_GRN.md."""
+        lines = list(self.lines.all())
+        total_ordered = sum((line.quantity for line in lines), Decimal("0"))
+        total_received = sum((line.qty_received for line in lines), Decimal("0"))
+        if total_received <= 0:
+            return
+        update_fields = []
+        if self.status == self.Status.SENT:
+            self.status = self.Status.PARTIALLY_DELIVERED
+            update_fields.append("status")
+        complete = total_received >= total_ordered
+        if complete != self.delivery_complete:
+            self.delivery_complete = complete
+            update_fields.append("delivery_complete")
+        if update_fields:
+            update_fields.append("updated_at")
+            self.save(update_fields=update_fields)
+
     def amend(self, user):
         """Reopen an approved/sent PO for editing as a new revision. Lines
         stay editable again and re-approval + re-send are required before
@@ -176,6 +215,18 @@ class PurchaseOrderLine(TimeStampedModel):
     line_total = models.DecimalField(max_digits=14, decimal_places=2, editable=False, default=Decimal("0.00"))
     deviates_from_contract = models.BooleanField(default=False, editable=False)
 
+    indent_line = models.ForeignKey(
+        "indents.IndentLine", null=True, blank=True, on_delete=models.SET_NULL, related_name="po_lines"
+    )
+    indent_qty_recorded = models.DecimalField(
+        max_digits=12, decimal_places=3, default=Decimal("0.000"), editable=False,
+        help_text="How much of this line's quantity has already been rolled up onto the indent line.",
+    )
+    qty_received = models.DecimalField(
+        max_digits=12, decimal_places=3, default=Decimal("0.000"), editable=False,
+        help_text="Cumulative accepted quantity across GRNs (stores app).",
+    )
+
     history = HistoricalRecords()
 
     class Meta:
@@ -187,6 +238,10 @@ class PurchaseOrderLine(TimeStampedModel):
     @property
     def description(self):
         return self.description_override or self.item.name
+
+    @property
+    def pending_quantity(self):
+        return self.quantity - self.qty_received
 
     def save(self, *args, **kwargs):
         if not self.unit:
@@ -227,6 +282,12 @@ class POApprovalAction(TimeStampedModel):
 
 
 class ApprovalRule(TimeStampedModel):
+    class DocType(models.TextChoices):
+        PO = "po", "Purchase Order"
+        INDENT = "indent", "Indent"
+        BILL = "bill", "Vendor Bill"
+
+    doc_type = models.CharField(max_length=10, choices=DocType.choices, default=DocType.PO)
     min_amount = models.DecimalField(max_digits=14, decimal_places=2)
     max_amount = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True, help_text="Leave blank for no cap.")
     approver_role = models.ForeignKey(Group, on_delete=models.CASCADE, related_name="approval_rules")
@@ -234,20 +295,20 @@ class ApprovalRule(TimeStampedModel):
     history = HistoricalRecords()
 
     class Meta:
-        ordering = ["min_amount"]
+        ordering = ["doc_type", "min_amount"]
 
     def __str__(self):
         upper = f"{self.max_amount}" if self.max_amount is not None else "and above"
-        return f"₹{self.min_amount}–{upper}: {self.approver_role.name}"
+        return f"[{self.get_doc_type_display()}] ₹{self.min_amount}–{upper}: {self.approver_role.name}"
 
     def clean(self):
         if self.max_amount is not None and self.max_amount < self.min_amount:
             raise ValidationError({"max_amount": "Max amount must be greater than or equal to min amount."})
 
     @classmethod
-    def approver_group_for_amount(cls, amount):
+    def approver_group_for_amount(cls, amount, doc_type=DocType.PO):
         rule = (
-            cls.objects.filter(min_amount__lte=amount)
+            cls.objects.filter(doc_type=doc_type, min_amount__lte=amount)
             .filter(models.Q(max_amount__isnull=True) | models.Q(max_amount__gte=amount))
             .order_by("min_amount")
             .first()
@@ -255,10 +316,10 @@ class ApprovalRule(TimeStampedModel):
         return rule.approver_role if rule else None
 
     @classmethod
-    def can_user_approve(cls, user, amount):
+    def can_user_approve(cls, user, amount, doc_type=DocType.PO):
         if user.is_superuser or user.groups.filter(name="SCM Head").exists():
             return True
-        group = cls.approver_group_for_amount(amount)
+        group = cls.approver_group_for_amount(amount, doc_type=doc_type)
         return bool(group and user.groups.filter(pk=group.pk).exists())
 
 

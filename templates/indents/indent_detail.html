@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ indent.indent_number }} &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <div>
+        <h1 class="text-xl font-semibold text-slate-900">{{ indent.indent_number }}</h1>
+        <div class="mt-1">{% include "indents/_status_badge.html" with status=indent.status %}</div>
+    </div>
+    {% if indent.status == "approved" or indent.status == "partially_ordered" %}
+    {% if can_manage_po %}
+    <a href="{% url 'indents:indent_convert' indent.pk %}" class="px-4 py-3 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800">Convert to PO</a>
+    {% endif %}
+    {% endif %}
+</div>
+
+<div class="bg-white rounded-lg shadow p-4 mb-6 flex flex-wrap gap-2 items-center">
+    {% if indent.status == "draft" %}
+    <form method="post" action="{% url 'indents:indent_submit' indent.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="px-4 py-3 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800">Submit for approval</button>
+    </form>
+    {% endif %}
+
+    {% if indent.status == "pending_approval" and can_approve %}
+    <details class="inline-block">
+        <summary class="px-4 py-3 rounded bg-green-700 text-white text-sm font-medium hover:bg-green-800 cursor-pointer list-none inline-block">Approve</summary>
+        <form method="post" action="{% url 'indents:indent_approve' indent.pk %}" class="mt-2 p-3 border rounded bg-slate-50 max-w-sm">
+            {% csrf_token %}
+            <label class="block text-xs text-slate-500 mb-1">Comment (optional)</label>
+            {{ reason_form.text }}
+            <button type="submit" class="mt-2 px-3 py-2 rounded bg-green-700 text-white text-sm">Confirm approve</button>
+        </form>
+    </details>
+    <details class="inline-block">
+        <summary class="px-4 py-3 rounded bg-red-600 text-white text-sm font-medium hover:bg-red-700 cursor-pointer list-none inline-block">Reject</summary>
+        <form method="post" action="{% url 'indents:indent_reject' indent.pk %}" class="mt-2 p-3 border rounded bg-slate-50 max-w-sm">
+            {% csrf_token %}
+            <label class="block text-xs text-slate-500 mb-1">Reason (required)</label>
+            {{ reason_form.text }}
+            <button type="submit" class="mt-2 px-3 py-2 rounded bg-red-600 text-white text-sm">Confirm reject</button>
+        </form>
+    </details>
+    {% endif %}
+
+    {% if indent.status != "ordered" and indent.status != "rejected" and indent.status != "cancelled" %}
+    <details class="inline-block">
+        <summary class="px-4 py-3 rounded border border-red-300 text-red-700 text-sm font-medium hover:bg-red-50 cursor-pointer list-none inline-block">Cancel</summary>
+        <form method="post" action="{% url 'indents:indent_cancel' indent.pk %}" class="mt-2 p-3 border rounded bg-slate-50 max-w-sm">
+            {% csrf_token %}
+            <label class="block text-xs text-slate-500 mb-1">Reason (required)</label>
+            {{ reason_form.text }}
+            <button type="submit" class="mt-2 px-3 py-2 rounded bg-red-600 text-white text-sm">Confirm cancel</button>
+        </form>
+    </details>
+    {% endif %}
+</div>
+
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <dl class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+        <div><dt class="text-slate-500">Site</dt><dd class="font-medium">{{ indent.site.name }}</dd></div>
+        <div><dt class="text-slate-500">Raised by</dt><dd class="font-medium">{{ indent.raised_by }}</dd></div>
+        <div><dt class="text-slate-500">Priority</dt><dd class="font-medium">{% if indent.priority == "urgent" %}<span class="text-red-600">Urgent</span>{% else %}Normal{% endif %}</dd></div>
+        <div><dt class="text-slate-500">Required by</dt><dd class="font-medium">{{ indent.required_by_date|date:"d-m-Y"|default:"—" }}</dd></div>
+        <div><dt class="text-slate-500">Estimated value</dt><dd class="font-medium">₹{{ estimated_value }} <span class="text-xs text-slate-400">(estimated)</span></dd></div>
+        {% if indent.approved_by %}<div><dt class="text-slate-500">Approved by</dt><dd class="font-medium">{{ indent.approved_by }} on {{ indent.approved_at|date:"d-m-Y" }}</dd></div>{% endif %}
+        {% if indent.rejection_reason %}<div class="sm:col-span-3"><dt class="text-slate-500">Rejection reason</dt><dd class="font-medium">{{ indent.rejection_reason }}</dd></div>{% endif %}
+        {% if indent.cancelled_reason %}<div class="sm:col-span-3"><dt class="text-slate-500">Cancellation reason</dt><dd class="font-medium">{{ indent.cancelled_reason }}</dd></div>{% endif %}
+        <div class="sm:col-span-3"><dt class="text-slate-500">Remarks</dt><dd class="font-medium">{{ indent.remarks|default:"—"|linebreaksbr }}</dd></div>
+    </dl>
+</div>
+
+<div class="bg-white rounded-lg shadow p-6">
+    <h2 class="text-sm font-semibold text-slate-900 mb-3">Items</h2>
+    {% include "indents/_indent_lines_section.html" %}
+</div>
+{% endblock %}
