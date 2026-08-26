@@ -7,7 +7,7 @@ def roles(request):
     if not user or not user.is_authenticated:
         return {
             "is_masters_manager": False, "can_view_po": False, "can_manage_po": False,
-            "can_view_vendor_ledgers": False, "can_access_indents": False,
+            "can_view_vendor_ledgers": False, "can_access_indents": False, "can_access_billing": False,
         }
     is_masters_manager = user.is_superuser or user.groups.filter(name__in=MASTERS_MANAGER_GROUPS).exists()
     can_access_indents = user.is_superuser or role_helpers.in_group(
@@ -21,4 +21,5 @@ def roles(request):
             role_helpers.can_view_purchase_orders(user) and not role_helpers.is_site_restricted(user)
         ),
         "can_access_indents": can_access_indents,
+        "can_access_billing": role_helpers.can_manage_bills(user),
     }

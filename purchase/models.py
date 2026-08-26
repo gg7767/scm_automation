@@ -226,6 +226,10 @@ class PurchaseOrderLine(TimeStampedModel):
         max_digits=12, decimal_places=3, default=Decimal("0.000"), editable=False,
         help_text="Cumulative accepted quantity across GRNs (stores app).",
     )
+    qty_already_billed = models.DecimalField(
+        max_digits=12, decimal_places=3, default=Decimal("0.000"), editable=False,
+        help_text="Cumulative billed quantity, updated when a bill is approved for payment (billing app).",
+    )
 
     history = HistoricalRecords()
 
@@ -242,6 +246,10 @@ class PurchaseOrderLine(TimeStampedModel):
     @property
     def pending_quantity(self):
         return self.quantity - self.qty_received
+
+    @property
+    def pending_billable_quantity(self):
+        return self.qty_received - self.qty_already_billed
 
     def save(self, *args, **kwargs):
         if not self.unit:

@@ -7,6 +7,9 @@
         {% if can_view_vendor_ledgers %}
         <a href="{% url 'purchase:vendor_ledger' vendor.pk %}" class="px-4 py-2 rounded border border-slate-300 text-sm font-medium hover:bg-slate-50">PO ledger</a>
         {% endif %}
+        {% if can_access_billing %}
+        <a href="{% url 'billing:vendor_ledger' vendor.pk %}" class="px-4 py-2 rounded border border-slate-300 text-sm font-medium hover:bg-slate-50">Full ledger</a>
+        {% endif %}
         <a href="{% url 'masters:vendor_update' vendor.pk %}" class="px-4 py-2 rounded border border-slate-300 text-sm font-medium hover:bg-slate-50">Edit</a>
     </div>
 </div>

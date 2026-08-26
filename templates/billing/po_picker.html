@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}New bill &mdash; SCM Automation{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold text-slate-900 mb-4">Which PO is this invoice against?</h1>
+
+<div class="bg-white rounded-lg shadow divide-y divide-slate-100">
+    {% for po in purchase_orders %}
+    <a href="{% url 'billing:bill_create' %}?po={{ po.pk }}" class="block px-4 py-4 hover:bg-slate-50">
+        <div class="font-medium text-slate-900">{{ po.po_number }}</div>
+        <div class="text-sm text-slate-500">{{ po.vendor.name }} &middot; {{ po.site.code }}</div>
+    </a>
+    {% empty %}
+    <p class="px-4 py-8 text-center text-slate-400">No open POs to bill against right now.</p>
+    {% endfor %}
+</div>
+{% endblock %}

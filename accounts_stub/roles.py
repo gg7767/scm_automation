@@ -34,3 +34,13 @@ def is_site_restricted(user):
 def user_site(user):
     profile = getattr(user, "profile", None)
     return profile.site if profile else None
+
+
+def can_manage_bills(user):
+    """Enter bills, run matching, record payments."""
+    return user.is_superuser or in_group(user, SCM_HEAD, ACCOUNTS)
+
+
+def can_override_mismatch(user):
+    """Only SCM Head can override a 3-way match mismatch."""
+    return user.is_superuser or in_group(user, SCM_HEAD)

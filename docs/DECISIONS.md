@@ -154,3 +154,53 @@ code + `docs/DEPLOYMENT.md`, not a live restore drill or real SMTP send.
 - `stores.services.record_receipt(grn)` is a deliberate no-op stub today;
   Phase 4 fills it in to write `StockLedger` entries, so GRN submission
   code never needs to change when that lands.
+
+## Phase 3: Bills, 3-way match, payments
+
+- Tally sync: skipped entirely per the user's explicit decision (confirmed
+  twice, including after being shown that the phase doc's golden-file XML
+  tests would make it testable without a live Tally server). No XML/CSV
+  export code exists; `Vendor.tally_ledger_name` is the only trace.
+- 3-way match tolerances are exact (0% qty, 0% rate, ₹1 total rounding) via
+  `BILL_MATCH_*` settings — matches both the user's answer and the phase
+  doc's own stated defaults.
+- `VendorBill._run_three_way_match` auto-advances straight to
+  `approved_for_payment` on a full pass (no separate resting "matched"
+  state in practice) and applies `qty_already_billed` + auto-closes the PO
+  (if `delivery_complete` and every line fully billed) only on that
+  transition — never on `override_mismatch`'s twin path re-does the same
+  two side effects, so both roads to "approved" behave identically.
+  Duplicate-invoice guard is a real `UniqueConstraint` on
+  `(vendor, vendor_invoice_number, financial_year)`, not just a `clean()`
+  check, so it's race-safe.
+- **Found and fixed the same bug twice**: `VendorBillForm`/`PaymentAllocationForm`
+  are validated via `form.is_valid()`, which calls `instance.full_clean()`
+  and therefore the model's own `clean()` — but `clean()` reads
+  `self.vendor`/`self.payment`, which aren't set until *after*
+  `form.is_valid()` in the naive view pattern (`form.save(commit=False)`
+  then assign FKs). Fixed both views by passing a pre-populated
+  `instance=Model(fk=value)` into the form constructor so validation sees
+  the FK. Caught only via live browser testing — the equivalent unit tests
+  had built objects directly, bypassing the view layer entirely; added a
+  view-level regression test for the payment-allocation case since the
+  existing suite had a real gap there.
+- `PaymentAllocation.clean()` computes remaining headroom as
+  `unallocated_amount + original_stored_amount` (fetched from the DB on
+  edit), not `+ the new proposed amount` — otherwise editing an existing
+  allocation's amount would silently miscompute the available headroom.
+- Vendor ledger (full) and payables aging are a new `billing` app view
+  pair, deliberately separate from the existing `purchase` app's PO-based
+  "lite" ledger (POs by status/value) — different questions, different
+  audiences (Accounts vs. Purchase Officer), no reason to conflate them.
+  `VendorOpeningBalance` (one row per vendor, admin-entered) seeds the
+  ledger's running balance for pre-go-live dues; no CSV import for it was
+  built since the phase doc didn't specify a format.
+- Match-result JSON keys must not start with `_` — Django template
+  variable lookup rejects underscore-prefixed attributes/keys outright
+  (`TemplateSyntaxError`), not silently. Renamed the totals-comparison key
+  from `_totals` to `totals` after hitting this in the bill-detail template.
+- `GRNAccessRequiredMixin` (create/manage) doesn't include Accounts, but
+  the debit-note-from-candidate workflow redirects to the GRN detail page
+  — so `GRNListView`/`GRNDetailView` specifically now use a separate
+  `GRNViewRequiredMixin` that adds Accounts as read-only, while
+  create/submit/reversal stay on the stricter mixin.

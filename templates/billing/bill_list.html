@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Vendor Bills &mdash; SCM Automation{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-semibold text-slate-900">Vendor Bills</h1>
+    <a href="{% url 'billing:po_picker' %}" class="px-4 py-3 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800">+ Enter bill</a>
+</div>
+
+<form method="get" class="bg-white rounded-lg shadow p-4 mb-4 flex flex-wrap gap-3 items-end">
+    <div class="flex-1 min-w-[180px]">
+        <label class="block text-xs font-medium text-slate-500">Search</label>
+        <input type="text" name="q" value="{{ q }}" placeholder="Bill number or invoice number"
+               class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+    </div>
+    <div>
+        <label class="block text-xs font-medium text-slate-500">Status</label>
+        <select name="status" class="mt-1 rounded border-slate-300 shadow-sm px-3 py-2 text-sm">
+            <option value="">All</option>
+            {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit" class="px-4 py-2 rounded bg-slate-200 text-slate-800 text-sm font-medium hover:bg-slate-300">Filter</button>
+</form>
+
+<div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-left text-slate-500">
+            <tr>
+                <th class="px-4 py-3">Bill Number</th>
+                <th class="px-4 py-3">Vendor Invoice</th>
+                <th class="px-4 py-3">Vendor</th>
+                <th class="px-4 py-3">Grand total</th>
+                <th class="px-4 py-3">Due date</th>
+                <th class="px-4 py-3">Status</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+            {% for bill in bills %}
+            <tr class="hover:bg-slate-50 cursor-pointer" onclick="window.location='{% url 'billing:bill_detail' bill.pk %}'">
+                <td class="px-4 py-3 font-medium text-slate-900">{{ bill.bill_number }}</td>
+                <td class="px-4 py-3">{{ bill.vendor_invoice_number }}</td>
+                <td class="px-4 py-3">{{ bill.vendor.name }}</td>
+                <td class="px-4 py-3">₹{{ bill.grand_total }}</td>
+                <td class="px-4 py-3">{{ bill.due_date|date:"d-m-Y"|default:"—" }}</td>
+                <td class="px-4 py-3">{% include "billing/_status_badge.html" with status=bill.status %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">No bills found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% include "partials/_pagination.html" %}
+{% endblock %}

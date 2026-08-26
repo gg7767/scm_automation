@@ -18,6 +18,7 @@ urlpatterns = [
     path("purchase/", include("purchase.urls")),
     path("indents/", include("indents.urls")),
     path("stores/", include("stores.urls")),
+    path("billing/", include("billing.urls")),
 ]
 
 if settings.DEBUG:

@@ -1,0 +1,15 @@
+{% if status == "draft" %}
+<span class="px-2 py-1 rounded bg-slate-100 text-slate-600 text-xs">Draft</span>
+{% elif status == "matched" %}
+<span class="px-2 py-1 rounded bg-blue-50 text-blue-700 text-xs">Matched</span>
+{% elif status == "mismatch" %}
+<span class="px-2 py-1 rounded bg-red-50 text-red-700 text-xs">Mismatch</span>
+{% elif status == "approved_for_payment" %}
+<span class="px-2 py-1 rounded bg-green-50 text-green-700 text-xs">Approved for payment</span>
+{% elif status == "partially_paid" %}
+<span class="px-2 py-1 rounded bg-purple-50 text-purple-700 text-xs">Partially paid</span>
+{% elif status == "paid" %}
+<span class="px-2 py-1 rounded bg-green-100 text-green-800 text-xs">Paid</span>
+{% elif status == "cancelled" %}
+<span class="px-2 py-1 rounded bg-red-50 text-red-700 text-xs">Cancelled</span>
+{% endif %}

@@ -77,4 +77,27 @@
         {% endif %}
     </form>
 </div>
+
+{% if not grn.is_editable and can_access_billing %}
+<div class="bg-white rounded-lg shadow p-6 mt-6">
+    <h2 class="text-sm font-semibold text-slate-900 mb-3">Rejected quantities</h2>
+    <ul class="divide-y divide-slate-100 text-sm">
+        {% for line in grn.lines.all %}
+        {% for candidate in line.debit_note_candidates.all %}
+        <li class="py-2 flex items-center justify-between">
+            <span>{{ line.po_line.item.name }}: {{ candidate.qty }} rejected — {{ candidate.reason|default:"no reason given" }}</span>
+            {% if candidate.resolved %}
+            <span class="text-slate-400 text-xs">Resolved</span>
+            {% else %}
+            <form method="post" action="{% url 'billing:debit_note_from_candidate' candidate.pk %}" onsubmit="return confirm('Create a debit note for this rejected quantity?');">
+                {% csrf_token %}
+                <button type="submit" class="text-red-600 hover:text-red-800 text-xs">Create debit note</button>
+            </form>
+            {% endif %}
+        </li>
+        {% endfor %}
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
 {% endblock %}

@@ -7,13 +7,19 @@ from accounts_stub import roles
 from purchase.models import PurchaseOrder
 from stores.forms import GRNForm, GRNLineFormSet
 from stores.models import GRN, InvalidStatusTransition
-from stores.permissions import GRNAccessRequiredMixin, GRNReversalRequiredMixin, sites_for_user, visible_grn_queryset
+from stores.permissions import (
+    GRNAccessRequiredMixin,
+    GRNReversalRequiredMixin,
+    GRNViewRequiredMixin,
+    sites_for_user,
+    visible_grn_queryset,
+)
 from stores.services import populate_lines_from_po
 
 PAGE_SIZE = 20
 
 
-class GRNListView(GRNAccessRequiredMixin, ListView):
+class GRNListView(GRNViewRequiredMixin, ListView):
     model = GRN
     template_name = "stores/grn_list.html"
     context_object_name = "grns"
@@ -84,7 +90,7 @@ class GRNReversalCreateView(GRNReversalRequiredMixin, GRNCreateView):
     is_reversal = True
 
 
-class GRNDetailView(GRNAccessRequiredMixin, DetailView):
+class GRNDetailView(GRNViewRequiredMixin, DetailView):
     model = GRN
     template_name = "stores/grn_detail.html"
     context_object_name = "grn"

@@ -26,6 +26,11 @@
                     {% if can_view_vendor_ledgers %}
                     <a href="{% url 'purchase:vendor_ledger_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Vendor Ledgers</a>
                     {% endif %}
+                    {% if can_access_billing %}
+                    <a href="{% url 'billing:bill_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Bills</a>
+                    <a href="{% url 'billing:payment_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Payments</a>
+                    <a href="{% url 'billing:payables_aging' %}" class="px-3 py-2 rounded hover:bg-slate-800">Payables Aging</a>
+                    {% endif %}
                     {% if is_masters_manager %}
                     <a href="{% url 'masters:site_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Sites</a>
                     <a href="{% url 'masters:category_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Categories</a>
@@ -62,6 +67,11 @@
                 {% endif %}
                 {% if can_view_vendor_ledgers %}
                 <a href="{% url 'purchase:vendor_ledger_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Vendor Ledgers</a>
+                {% endif %}
+                {% if can_access_billing %}
+                <a href="{% url 'billing:bill_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Bills</a>
+                <a href="{% url 'billing:payment_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Payments</a>
+                <a href="{% url 'billing:payables_aging' %}" class="px-3 py-3 rounded hover:bg-slate-800">Payables Aging</a>
                 {% endif %}
                 {% if is_masters_manager %}
                 <a href="{% url 'masters:site_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Sites</a>
