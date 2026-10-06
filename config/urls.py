@@ -15,6 +15,7 @@ urlpatterns = [
     path("help/", help_page, name="help"),
     path("login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("accounts/", include("accounts_stub.urls")),
     path("masters/", include("masters.urls")),
     path("purchase/", include("purchase.urls")),
     path("indents/", include("indents.urls")),
