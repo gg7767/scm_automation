@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Users &mdash; SCM Automation{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <h1 class="text-2xl font-semibold text-slate-900">Users</h1>
+        <a href="{% url 'accounts_stub:user_create' %}" class="px-4 py-2 rounded bg-slate-900 text-white hover:bg-slate-800 font-medium">
+            + Add User
+        </a>
+    </div>
+
+    <!-- Search and Filter Form -->
+    <form method="get" class="bg-white rounded-lg shadow p-4 mb-6">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+                <label for="search" class="block text-sm font-medium text-slate-700 mb-1">Search</label>
+                <input 
+                    type="text" 
+                    name="search" 
+                    id="search"
+                    value="{{ search }}"
+                    placeholder="Username, email, or name..."
+                    class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm"
+                >
+            </div>
+            <div>
+                <label for="status" class="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                <select name="status" id="status" class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm">
+                    <option value="all" {% if status == 'all' %}selected{% endif %}>All Users</option>
+                    <option value="active" {% if status == 'active' %}selected{% endif %}>Active</option>
+                    <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactive</option>
+                </select>
+            </div>
+            <div>
+                <label for="role" class="block text-sm font-medium text-slate-700 mb-1">Role</label>
+                <select name="role" id="role" class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm">
+                    <option value="">All Roles</option>
+                    {% for group in form.role.field.queryset %}
+                    <option value="{{ group.id }}" {% if role_id == group.id|stringformat:'s' %}selected{% endif %}>{{ group.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="mt-4">
+            <button type="submit" class="px-4 py-2 rounded bg-slate-900 text-white hover:bg-slate-800 font-medium text-sm">
+                Search
+            </button>
+            <a href="{% url 'accounts_stub:user_list' %}" class="ml-2 px-4 py-2 rounded bg-slate-200 text-slate-900 hover:bg-slate-300 text-sm">
+                Clear
+            </a>
+        </div>
+    </form>
+</div>
+
+<!-- Users Table -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    {% if users %}
+    <table class="w-full">
+        <thead class="bg-slate-50 border-b border-slate-200">
+            <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">Username</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">Email</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">Name</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">Roles</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">Status</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">Actions</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200">
+            {% for user in users %}
+            <tr class="hover:bg-slate-50">
+                <td class="px-6 py-4 text-sm font-medium text-slate-900">{{ user.username }}</td>
+                <td class="px-6 py-4 text-sm text-slate-600">{{ user.email }}</td>
+                <td class="px-6 py-4 text-sm text-slate-600">{{ user.get_full_name|default:"—" }}</td>
+                <td class="px-6 py-4 text-sm text-slate-600">
+                    {% if user.groups.all %}
+                        {% for group in user.groups.all %}
+                        <span class="inline-block bg-slate-200 text-slate-800 px-2 py-1 rounded text-xs mr-1 mb-1">{{ group.name }}</span>
+                        {% endfor %}
+                    {% else %}
+                    <span class="text-slate-400">No roles</span>
+                    {% endif %}
+                </td>
+                <td class="px-6 py-4 text-sm">
+                    {% if user.is_active %}
+                    <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-xs">Active</span>
+                    {% else %}
+                    <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded text-xs">Inactive</span>
+                    {% endif %}
+                </td>
+                <td class="px-6 py-4 text-sm">
+                    <a href="{% url 'accounts_stub:user_detail' user.pk %}" class="text-slate-900 hover:underline font-medium">
+                        Edit
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="px-6 py-12 text-center">
+        <p class="text-slate-600">No users found.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
