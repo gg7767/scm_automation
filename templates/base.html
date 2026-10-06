@@ -41,6 +41,9 @@
                     <a href="{% url 'masters:item_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Items</a>
                     <a href="{% url 'masters:vendor_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Vendors</a>
                     {% endif %}
+                    {% if user.is_superuser %}
+                    <a href="{% url 'accounts_stub:user_list' %}" class="px-3 py-2 rounded hover:bg-slate-800">Users</a>
+                    {% endif %}
                 </div>
                 {% endif %}
 
@@ -88,6 +91,9 @@
                 <a href="{% url 'masters:item_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Items</a>
                 <a href="{% url 'masters:vendor_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Vendors</a>
                 {% endif %}
+                {% if user.is_superuser %}
+                <a href="{% url 'accounts_stub:user_list' %}" class="px-3 py-3 rounded hover:bg-slate-800">Users</a>
+                {% endif %}
                 <hr class="border-slate-700 my-1">
                 <a href="{% url 'help' %}" class="px-3 py-3 rounded hover:bg-slate-800">Help</a>
                 <span class="text-slate-300 px-1">{{ user.get_full_name|default:user.username }}</span>
@@ -104,7 +110,7 @@
         {% if messages %}
         <div class="mb-4 space-y-2">
             {% for message in messages %}
-            <div class="px-4 py-3 rounded border {% if message.tags == 'error' %}bg-red-50 border-red-300 text-red-800{% elif message.tags == 'success' %}bg-green-50 border-green-300 text-green-800{% else %}bg-blue-50 border-blue-300 text-blue-800{% endif %}">
+            <div class="px-4 py-3 rounded border {% if message.tags == 'error' %}bg-red-50 border-red-300 text-red-800{% elif message.tags == 'success' %}bg-green-50 border-green-300 text-green-8[...]
                 {{ message }}
             </div>
             {% endfor %}
