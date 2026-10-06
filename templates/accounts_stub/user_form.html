@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Create User &mdash; SCM Automation{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl bg-white rounded-lg shadow p-6">
+    <h1 class="text-2xl font-semibold text-slate-900 mb-6">Create New User</h1>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="px-4 py-3 rounded bg-red-50 border border-red-300 text-red-800 text-sm">
+            {% for error in form.non_field_errors %}
+            <p>{{ error }}</p>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Username -->
+        <div>
+            <label for="{{ form.username.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">
+                Username
+            </label>
+            <input 
+                type="text" 
+                name="username" 
+                id="{{ form.username.id_for_label }}"
+                class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm {% if form.username.errors %}border-red-300{% endif %}"
+                required
+            >
+            {% if form.username.errors %}
+            <p class="mt-1 text-red-600 text-sm">{{ form.username.errors.0 }}</p>
+            {% endif %}
+            <p class="mt-1 text-slate-500 text-xs">{{ form.username.help_text }}</p>
+        </div>
+
+        <!-- Email -->
+        <div>
+            <label for="{{ form.email.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">
+                Email
+            </label>
+            <input 
+                type="email" 
+                name="email" 
+                id="{{ form.email.id_for_label }}"
+                class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm"
+                required
+            >
+            {% if form.email.errors %}
+            <p class="mt-1 text-red-600 text-sm">{{ form.email.errors.0 }}</p>
+            {% endif %}
+        </div>
+
+        <!-- First Name -->
+        <div>
+            <label for="{{ form.first_name.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">
+                First Name
+            </label>
+            <input 
+                type="text" 
+                name="first_name" 
+                id="{{ form.first_name.id_for_label }}"
+                class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm"
+            >
+        </div>
+
+        <!-- Last Name -->
+        <div>
+            <label for="{{ form.last_name.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">
+                Last Name
+            </label>
+            <input 
+                type="text" 
+                name="last_name" 
+                id="{{ form.last_name.id_for_label }}"
+                class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm"
+            >
+        </div>
+
+        <!-- Password -->
+        <div>
+            <label for="{{ form.password.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">
+                Password
+            </label>
+            <input 
+                type="password" 
+                name="password" 
+                id="{{ form.password.id_for_label }}"
+                class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm {% if form.password.errors %}border-red-300{% endif %}"
+                required
+            >
+            {% if form.password.errors %}
+            <p class="mt-1 text-red-600 text-sm">{{ form.password.errors.0 }}</p>
+            {% endif %}
+            <p class="mt-1 text-slate-500 text-xs">{{ form.password.help_text }}</p>
+        </div>
+
+        <!-- Confirm Password -->
+        <div>
+            <label for="{{ form.confirm_password.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">
+                Confirm Password
+            </label>
+            <input 
+                type="password" 
+                name="confirm_password" 
+                id="{{ form.confirm_password.id_for_label }}"
+                class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm {% if form.confirm_password.errors %}border-red-300{% endif %}"
+                required
+            >
+            {% if form.confirm_password.errors %}
+            <p class="mt-1 text-red-600 text-sm">{{ form.confirm_password.errors.0 }}</p>
+            {% endif %}
+        </div>
+
+        <!-- Site -->
+        <div>
+            <label for="{{ form.site.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">
+                Site (Optional)
+            </label>
+            <select 
+                name="site" 
+                id="{{ form.site.id_for_label }}"
+                class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm"
+            >
+                <option value="">-- Select a site --</option>
+                {% for group in form.site.field.queryset %}
+                <option value="{{ group.id }}">{{ group.name }}</option>
+                {% endfor %}
+            </select>
+            <p class="mt-1 text-slate-500 text-xs">{{ form.site.help_text }}</p>
+        </div>
+
+        <!-- Buttons -->
+        <div class="flex gap-4 pt-6 border-t border-slate-200">
+            <button 
+                type="submit" 
+                class="px-6 py-2 rounded bg-slate-900 text-white hover:bg-slate-800 font-medium"
+            >
+                Create User
+            </button>
+            <a 
+                href="{% url 'accounts_stub:user_list' %}" 
+                class="px-6 py-2 rounded bg-slate-200 text-slate-900 hover:bg-slate-300 font-medium"
+            >
+                Cancel
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}
