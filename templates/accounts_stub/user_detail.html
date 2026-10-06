@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}{{ user.username }} &mdash; SCM Automation{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="{% url 'accounts_stub:user_list' %}" class="text-slate-600 hover:text-slate-900">&larr; Back to Users</a>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- User Info Card -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-semibold text-slate-900 mb-4">User Information</h2>
+        <dl class="space-y-4 text-sm">
+            <div>
+                <dt class="text-slate-600">Username</dt>
+                <dd class="font-medium text-slate-900">{{ user.username }}</dd>
+            </div>
+            <div>
+                <dt class="text-slate-600">Email</dt>
+                <dd class="font-medium text-slate-900">{{ user.email|default:"—" }}</dd>
+            </div>
+            <div>
+                <dt class="text-slate-600">Full Name</dt>
+                <dd class="font-medium text-slate-900">{{ user.get_full_name|default:"—" }}</dd>
+            </div>
+            <div>
+                <dt class="text-slate-600">Status</dt>
+                <dd class="font-medium">
+                    {% if user.is_active %}
+                    <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-xs">Active</span>
+                    {% else %}
+                    <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded text-xs">Inactive</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-slate-600">Assigned Site</dt>
+                <dd class="font-medium text-slate-900">{{ user.profile.site|default:"—" }}</dd>
+            </div>
+        </dl>
+    </div>
+
+    <!-- Main Content -->
+    <div class="lg:col-span-2 space-y-6">
+        <!-- Edit Profile -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-slate-900 mb-4">Edit Profile</h2>
+            <form method="post" class="space-y-4">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="edit_profile">
+
+                <div>
+                    <label for="{{ edit_form.email.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">
+                        Email
+                    </label>
+                    <input 
+                        type="email" 
+                        name="email" 
+                        id="{{ edit_form.email.id_for_label }}"
+                        value="{{ user.email }}"
+                        class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm"
+                    >
+                </div>
+
+                <div>
+                    <label for="{{ edit_form.first_name.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">
+                        First Name
+                    </label>
+                    <input 
+                        type="text" 
+                        name="first_name" 
+                        id="{{ edit_form.first_name.id_for_label }}"
+                        value="{{ user.first_name }}"
+                        class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm"
+                    >
+                </div>
+
+                <div>
+                    <label for="{{ edit_form.last_name.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">
+                        Last Name
+                    </label>
+                    <input 
+                        type="text" 
+                        name="last_name" 
+                        id="{{ edit_form.last_name.id_for_label }}"
+                        value="{{ user.last_name }}"
+                        class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm"
+                    >
+                </div>
+
+                <div>
+                    <label for="{{ edit_form.site.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">
+                        Site
+                    </label>
+                    <select 
+                        name="site" 
+                        id="{{ edit_form.site.id_for_label }}"
+                        class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm"
+                    >
+                        <option value="">-- No site --</option>
+                        {% for site in edit_form.site.field.queryset %}
+                        <option value="{{ site.id }}" {% if user.profile.site.id == site.id %}selected{% endif %}>{{ site.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="flex items-center">
+                    <input 
+                        type="checkbox" 
+                        name="is_active" 
+                        id="{{ edit_form.is_active.id_for_label }}"
+                        {% if user.is_active %}checked{% endif %}
+                        class="h-4 w-4 rounded border-slate-300"
+                    >
+                    <label for="{{ edit_form.is_active.id_for_label }}" class="ml-2 text-sm font-medium text-slate-700">
+                        Active
+                    </label>
+                </div>
+
+                <button 
+                    type="submit" 
+                    class="px-4 py-2 rounded bg-slate-900 text-white hover:bg-slate-800 font-medium text-sm"
+                >
+                    Save Changes
+                </button>
+            </form>
+        </div>
+
+        <!-- Assign Roles -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-slate-900 mb-4">Assign Roles</h2>
+            <form method="post" class="space-y-4">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="assign_roles">
+
+                <p class="text-sm text-slate-600 mb-4">Select the roles for this user:</p>
+
+                <div class="space-y-3">
+                    {% for role in all_roles %}
+                    <label class="flex items-center">
+                        <input 
+                            type="checkbox" 
+                            name="role_{{ role }}"
+                            {% if role in user_roles %}checked{% endif %}
+                            class="h-4 w-4 rounded border-slate-300"
+                        >
+                        <span class="ml-2 text-sm font-medium text-slate-700">{{ role }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+
+                <button 
+                    type="submit" 
+                    class="px-4 py-2 rounded bg-slate-900 text-white hover:bg-slate-800 font-medium text-sm"
+                >
+                    Update Roles
+                </button>
+            </form>
+        </div>
+
+        <!-- Danger Zone -->
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-red-500">
+            <h2 class="text-lg font-semibold text-slate-900 mb-4">Danger Zone</h2>
+            
+            <!-- Toggle Status -->
+            <div class="mb-6">
+                <p class="text-sm text-slate-600 mb-3">
+                    {% if user.is_active %}
+                    Click below to deactivate this user account.
+                    {% else %}
+                    Click below to reactivate this user account.
+                    {% endif %}
+                </p>
+                <form method="post" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="toggle_status">
+                    <button 
+                        type="submit" 
+                        class="px-4 py-2 rounded {% if user.is_active %}bg-red-600 hover:bg-red-700{% else %}bg-green-600 hover:bg-green-700{% endif %} text-white font-medium text-sm"
+                    >
+                        {% if user.is_active %}Deactivate User{% else %}Reactivate User{% endif %}
+                    </button>
+                </form>
+            </div>
+
+            <!-- Delete User -->
+            <div>
+                <p class="text-sm text-slate-600 mb-3">
+                    This will permanently delete the user account and all associated data.
+                </p>
+                <form method="post" action="{% url 'accounts_stub:user_delete' user.pk %}" class="inline" onsubmit="return confirm('Are you sure? This cannot be undone.');">
+                    {% csrf_token %}
+                    <button 
+                        type="submit" 
+                        class="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-medium text-sm"
+                    >
+                        Delete User
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
