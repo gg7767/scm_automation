@@ -8,6 +8,7 @@ urlpatterns = [
     path("", views.IndentListView.as_view(), name="indent_list"),
     path("new/", views.IndentCreateView.as_view(), name="indent_create"),
     path("items/search/", views.ItemSearchView.as_view(), name="item_search"),
+    path("vendor-rates/", views.VendorRatesView.as_view(), name="vendor_rates"),
 
     path("<int:pk>/", views.IndentDetailView.as_view(), name="indent_detail"),
     path("<int:pk>/lines/add/", views.IndentLineCreateView.as_view(), name="indent_line_create"),

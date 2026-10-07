@@ -21,6 +21,7 @@
                 <th class="px-4 py-3">Code</th>
                 <th class="px-4 py-3">Vendor</th>
                 <th class="px-4 py-3">Open PO value</th>
+                <th class="px-4 py-3">Received value</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
@@ -29,9 +30,14 @@
                 <td class="px-4 py-3 font-medium text-slate-900">{{ row.vendor.code }}</td>
                 <td class="px-4 py-3">{{ row.vendor.name }}</td>
                 <td class="px-4 py-3">₹{{ row.open_value }}</td>
+                <td class="px-4 py-3">
+                    {% if row.received_value > 0 %}
+                    <span class="font-medium text-green-700">₹{{ row.received_value }}</span>
+                    {% else %}—{% endif %}
+                </td>
             </tr>
             {% empty %}
-            <tr><td colspan="3" class="px-4 py-8 text-center text-slate-400">No vendors found.</td></tr>
+            <tr><td colspan="4" class="px-4 py-8 text-center text-slate-400">No vendors found.</td></tr>
             {% endfor %}
         </tbody>
     </table>

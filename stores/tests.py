@@ -292,6 +292,38 @@ class GRNViewFlowTests(TestCase):
         grn.refresh_from_db()
         self.assertEqual(grn.status, GRN.Status.SUBMITTED)
 
+    def test_submit_via_view_with_formset_data_saves_partial_qty(self):
+        grn = GRN.objects.create(
+            po=self.po, received_by=self.user, challan_number="CH-1",
+            challan_date=datetime.date(2026, 1, 1), challan_photo=_tiny_photo(),
+        )
+        line = GRNLine.objects.create(grn=grn, po_line=self.po_line, qty_received=Decimal("100"), qty_accepted=Decimal("100"))
+
+        formset_data = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "1",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "1000",
+            "form-0-id": line.pk,
+            "form-0-qty_received": "20.000",
+            "form-0-qty_accepted": "20.000",
+            "form-0-qty_rejected": "0.000",
+            "form-0-rejection_reason": "",
+        }
+        response = self.client.post(reverse("stores:grn_submit", args=[grn.pk]), formset_data)
+        self.assertRedirects(response, reverse("stores:grn_detail", args=[grn.pk]))
+
+        line.refresh_from_db()
+        self.assertEqual(line.qty_received, Decimal("20.000"))
+        self.assertEqual(line.qty_accepted, Decimal("20.000"))
+
+        self.po_line.refresh_from_db()
+        self.assertEqual(self.po_line.qty_received, Decimal("20.000"))
+
+        self.po.refresh_from_db()
+        self.assertEqual(self.po.status, PurchaseOrder.Status.PARTIALLY_DELIVERED)
+        self.assertFalse(self.po.delivery_complete)
+
 
 # --- Phase 4: Inventory --------------------------------------------------
 

@@ -43,6 +43,8 @@
                 <th class="px-4 py-3">Vendor</th>
                 <th class="px-4 py-3">Site</th>
                 <th class="px-4 py-3">Grand total</th>
+                <th class="px-4 py-3">Delivered qty</th>
+                <th class="px-4 py-3">Received value</th>
                 <th class="px-4 py-3">Expected delivery</th>
                 <th class="px-4 py-3">Status</th>
             </tr>
@@ -54,11 +56,21 @@
                 <td class="px-4 py-3">{{ po.vendor.name }}</td>
                 <td class="px-4 py-3">{{ po.site.code }}</td>
                 <td class="px-4 py-3">₹{{ po.grand_total }}</td>
+                <td class="px-4 py-3">
+                    {% if po.total_received > 0 %}
+                    <span class="font-medium">{{ po.total_received }}/{{ po.total_ordered }}</span>
+                    {% else %}—{% endif %}
+                </td>
+                <td class="px-4 py-3">
+                    {% if po.received_value > 0 %}
+                    <span class="font-medium">₹{{ po.received_value }}</span>
+                    {% else %}—{% endif %}
+                </td>
                 <td class="px-4 py-3">{{ po.expected_delivery_date|date:"d-m-Y"|default:"—" }}</td>
                 <td class="px-4 py-3">{% include "purchase/_status_badge.html" with status=po.status %}</td>
             </tr>
             {% empty %}
-            <tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">No purchase orders found.</td></tr>
+            <tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">No purchase orders found.</td></tr>
             {% endfor %}
         </tbody>
     </table>

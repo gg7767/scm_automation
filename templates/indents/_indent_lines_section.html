@@ -1,84 +1,154 @@
 <div id="indent-lines-section">
-    <div class="overflow-x-auto mb-4">
-        <table class="w-full text-sm">
-            <thead class="text-left text-slate-500">
-                <tr>
-                    <th class="py-2 pr-3">Item</th>
-                    <th class="py-2 pr-3">Qty</th>
-                    <th class="py-2 pr-3">Purpose</th>
-                    <th class="py-2 pr-3">Status</th>
-                    {% if indent.is_editable %}<th class="py-2"></th>{% endif %}
+    <div class="overflow-x-auto mb-4 border rounded-lg shadow-sm bg-white">
+        <table class="w-full text-sm text-left border-collapse">
+            <thead>
+                <tr class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+                    <th class="py-3 px-3 min-w-[200px]">Item Description</th>
+                    <th class="py-3 px-3 w-28">UOM</th>
+                    <th class="py-3 px-3 text-right w-32">Present Stock</th>
+                    <th class="py-3 px-3 text-right w-32">Required Qty</th>
+                    <th class="py-3 px-3 w-36">Required By Date</th>
+                    <th class="py-3 px-3 min-w-[150px]">Remarks</th>
+                    {% if indent.is_editable %}<th class="py-3 px-3 text-center w-20">Action</th>{% endif %}
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
                 {% for line in indent.lines.all %}
-                <tr>
-                    <td class="py-2 pr-3">{{ line.item.name }}</td>
-                    <td class="py-2 pr-3">{{ line.quantity }} {{ line.get_unit_display }}</td>
-                    <td class="py-2 pr-3">{{ line.purpose|default:"—" }}</td>
-                    <td class="py-2 pr-3">
-                        {% if line.line_status == "ordered" %}<span class="text-green-700">Ordered</span>
-                        {% elif line.line_status == "partially_ordered" %}<span class="text-purple-700">Partial ({{ line.qty_ordered }})</span>
-                        {% elif line.line_status == "rejected" %}<span class="text-red-700">Rejected</span>
-                        {% else %}<span class="text-slate-400">Open</span>{% endif %}
-                    </td>
+                <tr class="hover:bg-slate-50">
+                    <td class="py-3 px-3 font-medium text-slate-900">{{ line.item.name }}</td>
+                    <td class="py-3 px-3 text-slate-600"><span class="inline-block px-2 py-0.5 text-xs bg-slate-100 rounded border border-slate-200 font-mono">{{ line.get_unit_display }}</span></td>
+                    <td class="py-3 px-3 text-right text-slate-700 font-mono">{{ line.present_stock|default:"0.000" }}</td>
+                    <td class="py-3 px-3 text-right font-semibold text-slate-900 font-mono">{{ line.quantity }}</td>
+                    <td class="py-3 px-3 text-slate-700">{{ line.required_by_date|date:"d-m-Y"|default:"—" }}</td>
+                    <td class="py-3 px-3 text-slate-600">{{ line.purpose|default:"—" }}</td>
                     {% if indent.is_editable %}
-                    <td class="py-2 text-right">
+                    <td class="py-3 px-3 text-center">
                         <form method="post" action="{% url 'indents:indent_line_delete' indent.pk line.pk %}"
                               hx-post="{% url 'indents:indent_line_delete' indent.pk line.pk %}"
                               hx-target="#indent-lines-section" hx-swap="outerHTML"
-                              hx-confirm="Remove this item?">
+                              hx-confirm="Remove this line item?">
                             {% csrf_token %}
-                            <button type="submit" class="text-red-600 hover:text-red-800 text-xs">Remove</button>
+                            <button type="submit" class="px-2 py-1 rounded text-red-600 hover:bg-red-50 text-xs font-medium">Remove</button>
                         </form>
                     </td>
                     {% endif %}
                 </tr>
                 {% empty %}
-                <tr><td colspan="5" class="py-4 text-slate-400">No items yet.</td></tr>
+                {% if not indent.is_editable %}
+                <tr><td colspan="6" class="py-6 text-center text-slate-400">No items added to this indent.</td></tr>
+                {% endif %}
                 {% endfor %}
+
+                {% if indent.is_editable %}
+                <!-- Line item input boxes row -->
+                <tr class="bg-slate-50/80 border-t-2 border-slate-200">
+                    <td colspan="{% if indent.is_editable %}7{% else %}6{% endif %}" class="p-0">
+                        <form hx-post="{% url 'indents:indent_line_create' indent.pk %}"
+                              hx-target="#indent-lines-section" hx-swap="outerHTML"
+                              id="add-line-form" class="p-4 bg-slate-50">
+                            {% csrf_token %}
+                            <input type="hidden" name="existing_item_id" id="id_existing_item_id">
+                            
+                            <div class="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Add Line Item</div>
+                            
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
+                                <!-- Col 1: Item Description with Dropdown -->
+                                <div class="lg:col-span-2 relative">
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">1. Item Description <span class="text-red-500">*</span></label>
+                                    <input type="text" name="item_description" id="id_item_description" required
+                                           placeholder="Type or select existing item..."
+                                           autocomplete="off"
+                                           class="w-full rounded border border-slate-300 px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-slate-900 focus:border-slate-900 bg-white"
+                                           hx-get="{% url 'indents:item_search' %}?site_id={{ indent.site.pk }}"
+                                           hx-trigger="keyup changed delay:200ms, focus"
+                                           hx-target="#item-search-results"
+                                           hx-include="this"
+                                           name="q"
+                                           oninput="handleItemInput(this.value)">
+                                    <div id="item-search-results" class="absolute z-20 w-full bg-white border border-slate-200 rounded shadow-lg mt-1 max-h-48 overflow-y-auto"></div>
+                                </div>
+
+                                <!-- Col 2: UOM -->
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">2. UOM</label>
+                                    <select name="unit" id="id_unit" class="w-full rounded border border-slate-300 px-2 py-2 text-sm shadow-sm bg-white focus:ring-2 focus:ring-slate-900">
+                                        {% for val, label in unit_choices %}
+                                        <option value="{{ val }}">{{ val }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+
+                                <!-- Col 3: Present Stock -->
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">3. Present Stock</label>
+                                    <input type="number" step="0.001" name="present_stock" id="id_present_stock" value="0.000"
+                                           class="w-full rounded border border-slate-300 px-3 py-2 text-sm shadow-sm bg-white focus:ring-2 focus:ring-slate-900">
+                                </div>
+
+                                <!-- Col 4: Required Qty -->
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">4. Required Qty <span class="text-red-500">*</span></label>
+                                    <input type="number" step="0.001" name="quantity" id="id_quantity" required placeholder="0.000"
+                                           class="w-full rounded border border-slate-300 px-3 py-2 text-sm shadow-sm bg-white focus:ring-2 focus:ring-slate-900">
+                                </div>
+
+                                <!-- Col 5: Required By Date -->
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">5. Required By Date</label>
+                                    <input type="date" name="required_by_date" id="id_required_by_date"
+                                           class="w-full rounded border border-slate-300 px-2 py-2 text-sm shadow-sm bg-white focus:ring-2 focus:ring-slate-900">
+                                </div>
+
+                                <!-- Col 6: Remarks -->
+                                <div class="lg:col-span-2">
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">6. Remarks</label>
+                                    <input type="text" name="purpose" id="id_purpose" placeholder="Notes / purpose"
+                                           class="w-full rounded border border-slate-300 px-3 py-2 text-sm shadow-sm bg-white focus:ring-2 focus:ring-slate-900">
+                                </div>
+
+                                <!-- Add Button -->
+                                <div class="flex items-end">
+                                    <button type="submit" class="w-full px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 shadow transition flex items-center justify-center gap-1">
+                                        <span>+ Add Item</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </td>
+                </tr>
+                {% endif %}
             </tbody>
         </table>
     </div>
 
-    {% if indent.is_editable %}
-    <div class="border-t pt-4">
-        <h3 class="text-sm font-semibold text-slate-900 mb-2">Add item</h3>
-        <div class="relative mb-2">
-            <input type="text" id="item-query" autocomplete="off" placeholder="Search item by name or code…"
-                   class="w-full rounded border-slate-300 shadow-sm px-3 py-3 text-base"
-                   hx-get="{% url 'indents:item_search' %}"
-                   hx-trigger="keyup changed delay:300ms"
-                   hx-target="#item-search-results"
-                   hx-include="this"
-                   name="q">
-            <div id="item-search-results" class="absolute z-10 w-full bg-white border border-slate-200 rounded shadow-lg mt-1"></div>
-        </div>
-
-        <form hx-post="{% url 'indents:indent_line_create' indent.pk %}" hx-target="#indent-lines-section" hx-swap="outerHTML"
-              class="grid grid-cols-2 gap-2 items-end" id="add-line-form">
-            {% csrf_token %}
-            <input type="hidden" name="item" id="id_line_item" required>
-            <div>
-                <label class="block text-xs font-medium text-slate-500">Quantity</label>
-                <input type="number" step="0.001" name="quantity" id="id_line_quantity" required class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-3 text-base">
-            </div>
-            <div>
-                <label class="block text-xs font-medium text-slate-500">Purpose (optional)</label>
-                <input type="text" name="purpose" id="id_line_purpose" class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-3 text-base">
-            </div>
-            <button type="submit" class="col-span-2 px-4 py-3 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800">Add item</button>
-        </form>
-        <p id="item-selected-hint" class="mt-1 text-xs text-slate-500"></p>
-    </div>
-
     <script>
-        function selectIndentItem(id, name) {
-            document.getElementById('id_line_item').value = id;
-            document.getElementById('item-query').value = name;
+        function selectIndentItem(id, name, unit, stock) {
+            document.getElementById('id_existing_item_id').value = id;
+            document.getElementById('id_item_description').value = name;
+
+            if (unit) {
+                const unitSelect = document.getElementById('id_unit');
+                if (unitSelect) unitSelect.value = unit;
+            }
+            if (stock !== undefined && stock !== null) {
+                const stockInput = document.getElementById('id_present_stock');
+                if (stockInput) stockInput.value = parseFloat(stock).toFixed(3);
+            }
+
             document.getElementById('item-search-results').innerHTML = '';
-            document.getElementById('item-selected-hint').textContent = 'Selected: ' + name;
+            document.getElementById('id_quantity').focus();
         }
+
+        function handleItemInput(val) {
+            document.getElementById('id_existing_item_id').value = '';
+        }
+
+        document.addEventListener('click', function(e) {
+            const container = document.getElementById('item-search-results');
+            const input = document.getElementById('id_item_description');
+            if (container && !container.contains(e.target) && e.target !== input) {
+                container.innerHTML = '';
+            }
+        });
     </script>
-    {% endif %}
 </div>

@@ -1,54 +1,100 @@
 {% extends "base.html" %}
 {% block title %}Convert {{ indent.indent_number }} &mdash; SCM Automation{% endblock %}
 {% block content %}
-<div class="max-w-2xl mx-auto bg-white rounded-lg shadow p-6">
+<div class="max-w-3xl mx-auto bg-white rounded-lg shadow p-6">
     <h1 class="text-lg font-semibold text-slate-900 mb-1">Convert {{ indent.indent_number }} to PO</h1>
-    <p class="text-sm text-slate-500 mb-4">Choose a vendor and how much of each open item to order now. Leave a quantity blank to skip that item this time.</p>
+    <p class="text-sm text-slate-500 mb-4">Choose a vendor, set quantities and prices for each item. If a vendor has previous POs for an item, their price will auto-populate, but you can edit or enter any price as needed.</p>
 
     <form method="post" class="space-y-4">
         {% csrf_token %}
         <div>
-            <label class="block text-sm font-medium text-slate-700">Vendor</label>
-            <select name="vendor" required class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-3 text-base">
-                <option value="">---------</option>
+            <label class="block text-sm font-medium text-slate-700">Vendor <span class="text-red-500">*</span></label>
+            <select name="vendor" id="vendor-select" required onchange="fetchVendorRates()"
+                    class="mt-1 w-full rounded border-slate-300 shadow-sm px-3 py-3 text-base">
+                <option value="">--------- Select Vendor ---------</option>
                 {% for v in vendors %}
-                <option value="{{ v.pk }}">{{ v.code }} — {{ v.name }}</option>
+                <option value="{{ v.pk }}">{{ v.code }} &mdash; {{ v.name }}</option>
                 {% endfor %}
             </select>
         </div>
 
         <div class="overflow-x-auto">
             <table class="w-full text-sm">
-                <thead class="text-left text-slate-500">
+                <thead class="text-left text-slate-500 border-b border-slate-200">
                     <tr>
-                        <th class="py-2 pr-3">Item</th>
-                        <th class="py-2 pr-3">Ordered so far</th>
-                        <th class="py-2 pr-3">Remaining</th>
-                        <th class="py-2">Order now</th>
+                        <th class="py-2.5 pr-3">Item</th>
+                        <th class="py-2.5 pr-3">Ordered so far</th>
+                        <th class="py-2.5 pr-3">Remaining</th>
+                        <th class="py-2.5 pr-3 w-32">Order Now (Qty)</th>
+                        <th class="py-2.5 w-36">Price / Rate (₹)</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     {% for line in open_lines %}
                     <tr>
-                        <td class="py-2 pr-3">{{ line.item.name }}</td>
-                        <td class="py-2 pr-3">{{ line.qty_ordered }} {{ line.get_unit_display }}</td>
-                        <td class="py-2 pr-3">{{ line.remaining_quantity }} {{ line.get_unit_display }}</td>
-                        <td class="py-2">
-                            <input type="number" step="0.001" name="qty_{{ line.pk }}" placeholder="0"
-                                   class="w-28 rounded border-slate-300 shadow-sm px-2 py-2 text-sm">
+                        <td class="py-2.5 pr-3 font-medium text-slate-900">{{ line.item.name }}</td>
+                        <td class="py-2.5 pr-3 text-slate-600">{{ line.qty_ordered }} {{ line.get_unit_display }}</td>
+                        <td class="py-2.5 pr-3 font-semibold text-slate-700">{{ line.remaining_quantity }} {{ line.get_unit_display }}</td>
+                        <td class="py-2.5 pr-3">
+                            <input type="number" step="0.001" name="qty_{{ line.pk }}" placeholder="0.000"
+                                   class="w-full rounded border-slate-300 shadow-sm px-2 py-2 text-sm focus:ring-2 focus:ring-slate-900">
+                        </td>
+                        <td class="py-2.5">
+                            <input type="number" step="0.01" name="rate_{{ line.pk }}" id="rate_{{ line.pk }}"
+                                   data-item-id="{{ line.item.pk }}" placeholder="0.00"
+                                   class="rate-input w-full rounded border-slate-300 shadow-sm px-2 py-2 text-sm focus:ring-2 focus:ring-slate-900">
                         </td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="4" class="py-4 text-slate-400">No open items left to convert.</td></tr>
+                    <tr><td colspan="5" class="py-4 text-slate-400 text-center">No open items left to convert.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
 
-        <div class="flex gap-3 pt-2">
-            <button type="submit" class="px-4 py-3 rounded bg-slate-900 text-white font-medium hover:bg-slate-800">Create draft PO</button>
-            <a href="{% url 'indents:indent_detail' indent.pk %}" class="px-4 py-3 rounded border border-slate-300 text-slate-700 hover:bg-slate-50">Cancel</a>
+        <div class="flex gap-3 pt-4 border-t border-slate-100">
+            <button type="submit" class="px-5 py-3 rounded bg-slate-900 text-white font-medium hover:bg-slate-800 shadow">Create Draft PO</button>
+            <a href="{% url 'indents:indent_detail' indent.pk %}" class="px-5 py-3 rounded border border-slate-300 text-slate-700 hover:bg-slate-50">Cancel</a>
         </div>
     </form>
 </div>
+
+<script>
+    function fetchVendorRates() {
+        const vendorSelect = document.getElementById('vendor-select');
+        const vendorId = vendorSelect ? vendorSelect.value : '';
+        const rateInputs = document.querySelectorAll('.rate-input');
+
+        if (!vendorId) {
+            rateInputs.forEach(input => input.value = '');
+            return;
+        }
+
+        const itemIds = Array.from(rateInputs).map(input => input.getAttribute('data-item-id')).filter(Boolean);
+        if (itemIds.length === 0) return;
+
+        const url = "{% url 'indents:vendor_rates' %}?vendor_id=" + encodeURIComponent(vendorId) + "&item_ids=" + encodeURIComponent(itemIds.join(','));
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                rateInputs.forEach(input => {
+                    const itemId = input.getAttribute('data-item-id');
+                    if (data && data[itemId] !== undefined && data[itemId] !== null && data[itemId] !== '') {
+                        input.value = parseFloat(data[itemId]).toFixed(2);
+                    } else {
+                        input.value = '';
+                    }
+                });
+            })
+            .catch(err => console.error('Error fetching vendor rates:', err));
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const vendorSelect = document.getElementById('vendor-select');
+        if (vendorSelect && vendorSelect.value) {
+            fetchVendorRates();
+        }
+    });
+</script>
 {% endblock %}

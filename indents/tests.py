@@ -338,3 +338,146 @@ class UrgentIndentNotificationTests(TestCase):
         indent.submit_for_approval(raiser)
 
         self.assertEqual(Notification.objects.count(), 0)
+
+
+class NewIndentWorkflowAndTableTests(TestCase):
+    def setUp(self):
+        self.site = Site.objects.create(name="Hyderabad Factory 1", code="HYD-F1")
+        self.category = ItemCategory.objects.create(name="Cement")
+        self.existing_item = Item.objects.create(name="OPC 53", category=self.category, unit=Item.Unit.BAG)
+
+        self.user = User.objects.create_user(username="siteuser", password="pass12345")
+        self.user.groups.add(Group.objects.create(name="Site Member"))
+        self.user.profile.site = self.site
+        self.user.profile.save()
+        self.client.login(username="siteuser", password="pass12345")
+
+    def test_raise_indent_bypasses_new_form_and_redirects_to_detail(self):
+        response = self.client.get(reverse("indents:indent_create"))
+        self.assertEqual(response.status_code, 302)
+        indent = Indent.objects.filter(site=self.site, raised_by=self.user).latest("created_at")
+        self.assertRedirects(response, reverse("indents:indent_detail", args=[indent.pk]))
+
+    def test_add_line_item_for_existing_item(self):
+        indent = Indent.objects.create(site=self.site, raised_by=self.user)
+        from stores.models import StockBalance
+        StockBalance.objects.create(site=self.site, item=self.existing_item, quantity=Decimal("150.000"))
+
+        response = self.client.post(reverse("indents:indent_line_create", args=[indent.pk]), {
+            "item_description": "OPC 53",
+            "existing_item_id": self.existing_item.pk,
+            "unit": "BAG",
+            "quantity": "25.000",
+            "required_by_date": "2026-11-01",
+            "purpose": "Slab casting",
+        })
+        self.assertEqual(response.status_code, 200)
+        line = indent.lines.first()
+        self.assertIsNotNone(line)
+        self.assertEqual(line.item, self.existing_item)
+        self.assertEqual(line.quantity, Decimal("25.000"))
+        self.assertEqual(line.unit, "BAG")
+        self.assertEqual(line.present_stock, Decimal("150.000"))
+        self.assertEqual(str(line.required_by_date), "2026-11-01")
+        self.assertEqual(line.purpose, "Slab casting")
+
+    def test_add_line_item_for_new_item(self):
+        indent = Indent.objects.create(site=self.site, raised_by=self.user)
+        response = self.client.post(reverse("indents:indent_line_create", args=[indent.pk]), {
+            "item_description": "Steel Rod 12mm",
+            "unit": "MT",
+            "present_stock": "5.000",
+            "quantity": "10.000",
+            "required_by_date": "2026-12-15",
+            "purpose": "Reinforcement",
+        })
+        self.assertEqual(response.status_code, 200)
+        line = indent.lines.first()
+        self.assertIsNotNone(line)
+        self.assertEqual(line.item.name, "Steel Rod 12mm")
+        self.assertEqual(line.item.unit, "MT")
+        self.assertEqual(line.quantity, Decimal("10.000"))
+        self.assertEqual(line.present_stock, Decimal("5.000"))
+        self.assertEqual(str(line.required_by_date), "2026-12-15")
+        self.assertEqual(line.purpose, "Reinforcement")
+
+    def test_six_columns_rendered_in_detail_view(self):
+        indent = Indent.objects.create(site=self.site, raised_by=self.user)
+        IndentLine.objects.create(
+            indent=indent,
+            item=self.existing_item,
+            quantity=Decimal("50.000"),
+            unit="BAG",
+            present_stock=Decimal("100.000"),
+            required_by_date=datetime.date(2026, 10, 20),
+            purpose="Foundation test"
+        )
+        response = self.client.get(reverse("indents:indent_detail", args=[indent.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Item Description")
+        self.assertContains(response, "UOM")
+        self.assertContains(response, "Present Stock")
+        self.assertContains(response, "Required Qty")
+        self.assertContains(response, "Required By Date")
+        self.assertContains(response, "Remarks")
+        self.assertContains(response, "OPC 53")
+        self.assertContains(response, "100.000")
+        self.assertContains(response, "50.000")
+        self.assertContains(response, "20-10-2026")
+        self.assertContains(response, "Foundation test")
+
+
+class VendorPriceConversionTests(TestCase):
+    def setUp(self):
+        self.site = Site.objects.create(name="Hyderabad Factory 1", code="HYD-F1")
+        self.category = ItemCategory.objects.create(name="Cement")
+        self.item1 = Item.objects.create(name="OPC 53", category=self.category, unit=Item.Unit.BAG)
+        self.item2 = Item.objects.create(name="PPC Cement", category=self.category, unit=Item.Unit.BAG)
+
+        self.vendor = Vendor.objects.create(name="UltraTech Cement", code="VEN-001", status="active")
+
+        po_group = Group.objects.create(name="Purchase Officer (HO)")
+        ApprovalRule.objects.create(
+            doc_type=ApprovalRule.DocType.PO, min_amount=Decimal("0"), max_amount=None, approver_role=po_group
+        )
+        self.scm_head = User.objects.create_user(username="scmhead", password="pass12345")
+        self.scm_head.groups.add(po_group)
+        self.client.login(username="scmhead", password="pass12345")
+
+        # Previous PO for item1 with vendor at rate 390.00
+        from purchase.models import PurchaseOrder, PurchaseOrderLine
+        prev_po = PurchaseOrder.objects.create(vendor=self.vendor, site=self.site, created_by=self.scm_head)
+        PurchaseOrderLine.objects.create(po=prev_po, item=self.item1, quantity=Decimal("100"), rate=Decimal("390.00"), created_by=self.scm_head)
+
+        self.indent = Indent.objects.create(site=self.site, raised_by=self.scm_head, status=Indent.Status.APPROVED)
+        self.line1 = IndentLine.objects.create(indent=self.indent, item=self.item1, quantity=Decimal("50"))
+        self.line2 = IndentLine.objects.create(indent=self.indent, item=self.item2, quantity=Decimal("30"))
+
+    def test_vendor_rates_api_returns_historical_price_or_empty(self):
+        response = self.client.get(
+            reverse("indents:vendor_rates") + f"?vendor_id={self.vendor.pk}&item_ids={self.item1.pk},{self.item2.pk}"
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data.get(str(self.item1.pk)), "390.00")
+        self.assertEqual(data.get(str(self.item2.pk)), "")
+
+    def test_convert_indent_to_po_with_custom_and_autopopulated_rates(self):
+        response = self.client.post(reverse("indents:indent_convert", args=[self.indent.pk]), {
+            "vendor": self.vendor.pk,
+            f"qty_{self.line1.pk}": "50",
+            f"rate_{self.line1.pk}": "395.00",  # SCM head edited price
+            f"qty_{self.line2.pk}": "30",
+            f"rate_{self.line2.pk}": "320.00",  # SCM head entered price for item without prior PO
+        })
+        from purchase.models import PurchaseOrder
+        po = PurchaseOrder.objects.get(source_indent=self.indent)
+        self.assertRedirects(response, reverse("purchase:po_detail", args=[po.pk]))
+        self.assertEqual(po.lines.count(), 2)
+
+        po_line1 = po.lines.get(item=self.item1)
+        po_line2 = po.lines.get(item=self.item2)
+        self.assertEqual(po_line1.rate, Decimal("395.00"))
+        self.assertEqual(po_line2.rate, Decimal("320.00"))
+
+

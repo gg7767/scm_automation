@@ -84,6 +84,25 @@ class PurchaseOrder(TimeStampedModel):
     def is_editable(self):
         return self.status == self.Status.DRAFT
 
+    @property
+    def total_ordered(self):
+        """Sum of ordered quantities across all lines."""
+        return sum((line.quantity for line in self.lines.all()), Decimal("0"))
+
+    @property
+    def total_received(self):
+        """Sum of received quantities across all lines (from GRNs)."""
+        return sum((line.qty_received for line in self.lines.all()), Decimal("0"))
+
+    @property
+    def received_value(self):
+        """Monetary value of items actually received (qty_received * rate per line),
+        excluding GST — analogous to subtotal but only for received quantities."""
+        return sum(
+            (line.qty_received * line.rate).quantize(Decimal("0.01"))
+            for line in self.lines.all()
+        )
+
     def recompute_totals(self, save=True):
         subtotal = Decimal("0.00")
         gst_amount = Decimal("0.00")

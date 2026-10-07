@@ -140,6 +140,8 @@ class IndentLine(TimeStampedModel):
     item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="+")
     quantity = models.DecimalField(max_digits=12, decimal_places=3)
     unit = models.CharField(max_length=4, choices=Item.Unit.choices, blank=True)
+    present_stock = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal("0.000"), null=True, blank=True)
+    required_by_date = models.DateField(null=True, blank=True)
     purpose = models.CharField(max_length=255, blank=True)
 
     qty_ordered = models.DecimalField(max_digits=12, decimal_places=3, default=Decimal("0.000"))

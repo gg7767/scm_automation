@@ -122,6 +122,18 @@ class GRNLinesUpdateView(GRNAccessRequiredMixin, View):
 class GRNSubmitView(GRNAccessRequiredMixin, View):
     def post(self, request, pk):
         grn = get_object_or_404(GRN, pk=pk)
+        if not grn.is_editable:
+            messages.error(request, "This GRN has already been submitted.")
+            return redirect("stores:grn_detail", pk=pk)
+
+        if "form-TOTAL_FORMS" in request.POST:
+            formset = GRNLineFormSet(request.POST, queryset=grn.lines.select_related("po_line__item"))
+            if formset.is_valid():
+                formset.save()
+            else:
+                messages.error(request, "Could not submit GRN: please check the entered quantities.")
+                return redirect("stores:grn_detail", pk=pk)
+
         try:
             grn.submit(request.user)
             messages.success(request, f"{grn.grn_number} submitted.")

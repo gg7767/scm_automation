@@ -7,10 +7,17 @@
 </div>
 
 <div class="bg-white rounded-lg shadow p-6 mb-6">
-    <dl class="text-sm">
-        <dt class="text-slate-500">Total open PO value</dt>
-        <dd class="text-2xl font-semibold text-slate-900">₹{{ open_value }}</dd>
-        <p class="text-xs text-slate-500 mt-1">Sum of grand totals for POs not yet closed or cancelled.</p>
+    <dl class="grid grid-cols-2 gap-6 text-sm">
+        <div>
+            <dt class="text-slate-500">Total open PO value</dt>
+            <dd class="text-2xl font-semibold text-slate-900">₹{{ open_value }}</dd>
+            <p class="text-xs text-slate-500 mt-1">Sum of grand totals for POs not yet closed or cancelled.</p>
+        </div>
+        <div>
+            <dt class="text-slate-500">Received value (at site)</dt>
+            <dd class="text-2xl font-semibold text-green-700">₹{{ received_value }}</dd>
+            <p class="text-xs text-slate-500 mt-1">Value of items actually received against open POs.</p>
+        </div>
     </dl>
 </div>
 
@@ -21,6 +28,8 @@
                 <th class="px-4 py-3">PO Number</th>
                 <th class="px-4 py-3">Site</th>
                 <th class="px-4 py-3">Grand total</th>
+                <th class="px-4 py-3">Delivered qty</th>
+                <th class="px-4 py-3">Received value</th>
                 <th class="px-4 py-3">Status</th>
             </tr>
         </thead>
@@ -30,10 +39,20 @@
                 <td class="px-4 py-3 font-medium text-slate-900">{{ po.po_number }}</td>
                 <td class="px-4 py-3">{{ po.site.code }}</td>
                 <td class="px-4 py-3">₹{{ po.grand_total }}</td>
+                <td class="px-4 py-3">
+                    {% if po.total_received > 0 %}
+                    <span class="font-medium">{{ po.total_received }}/{{ po.total_ordered }}</span>
+                    {% else %}—{% endif %}
+                </td>
+                <td class="px-4 py-3">
+                    {% if po.received_value > 0 %}
+                    <span class="font-medium text-green-700">₹{{ po.received_value }}</span>
+                    {% else %}—{% endif %}
+                </td>
                 <td class="px-4 py-3">{% include "purchase/_status_badge.html" with status=po.status %}</td>
             </tr>
             {% empty %}
-            <tr><td colspan="4" class="px-4 py-8 text-center text-slate-400">No purchase orders for this vendor yet.</td></tr>
+            <tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">No purchase orders for this vendor yet.</td></tr>
             {% endfor %}
         </tbody>
     </table>

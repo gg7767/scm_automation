@@ -51,7 +51,7 @@ class PurchaseOrderListView(POViewRequiredMixin, ListView):
     paginate_by = PAGE_SIZE
 
     def get_queryset(self):
-        qs = visible_po_queryset(self.request.user, PurchaseOrder.objects.select_related("vendor", "site"))
+        qs = visible_po_queryset(self.request.user, PurchaseOrder.objects.select_related("vendor", "site").prefetch_related("lines"))
         q = self.request.GET.get("q", "").strip()
         if q:
             qs = qs.filter(Q(po_number__icontains=q) | Q(vendor__name__icontains=q))
@@ -374,9 +374,11 @@ class VendorLedgerListView(VendorLedgerViewRequiredMixin, ListView):
 
         ctx = super().get_context_data(**kwargs)
         ctx["q"] = self.request.GET.get("q", "")
-        ctx["vendor_rows"] = [
-            {"vendor": v, "open_value": vendor_ledger(v)["open_value"]} for v in ctx["vendors"]
-        ]
+        vendor_rows = []
+        for v in ctx["vendors"]:
+            ledger = vendor_ledger(v)
+            vendor_rows.append({"vendor": v, "open_value": ledger["open_value"], "received_value": ledger["received_value"]})
+        ctx["vendor_rows"] = vendor_rows
         return ctx
 
 
@@ -392,6 +394,7 @@ class VendorLedgerView(VendorLedgerViewRequiredMixin, DetailView):
         ledger = vendor_ledger(self.object)
         ctx["purchase_orders"] = visible_po_queryset(self.request.user, ledger["purchase_orders"])
         ctx["open_value"] = ledger["open_value"]
+        ctx["received_value"] = ledger["received_value"]
         return ctx
 
 

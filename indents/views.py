@@ -1,29 +1,55 @@
+from decimal import Decimal, InvalidOperation
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
+from django.utils.dateparse import parse_date
+from django.views.generic import DetailView, ListView, View
 
 from accounts_stub import roles
-from indents.forms import IndentForm, IndentLineForm, ReasonForm
+from indents.forms import ReasonForm
 from indents.models import Indent, IndentLine, InvalidStatusTransition
 from indents.permissions import (
     IndentAccessRequiredMixin,
     IndentConversionRequiredMixin,
     visible_indent_queryset,
 )
-from masters.models import Item
+from masters.models import Item, Site
+from stores.models import StockBalance
 
 PAGE_SIZE = 20
 
 
 def _lines_section_response(request, indent):
+    unit_choices = Item.Unit.choices
+    existing_items_qs = Item.objects.filter(active=True).order_by("name")
+
+    stock_map = {
+        sb.item_id: sb.quantity
+        for sb in StockBalance.objects.filter(site=indent.site)
+    }
+
+    items_data = []
+    for item in existing_items_qs:
+        items_data.append({
+            "id": item.pk,
+            "name": item.name,
+            "code": item.code,
+            "unit": item.unit,
+            "unit_display": item.get_unit_display(),
+            "stock": stock_map.get(item.pk, Decimal("0.000")),
+        })
+
     html = render_to_string(
         "indents/_indent_lines_section.html",
-        {"indent": indent, "line_form": IndentLineForm()},
+        {
+            "indent": indent,
+            "unit_choices": unit_choices,
+            "existing_items": items_data,
+        },
         request=request,
     )
     return HttpResponse(html)
@@ -53,26 +79,33 @@ class IndentListView(IndentAccessRequiredMixin, ListView):
         return ctx
 
 
-class IndentCreateView(IndentAccessRequiredMixin, CreateView):
-    model = Indent
-    form_class = IndentForm
-    template_name = "indents/indent_form.html"
+class IndentCreateView(IndentAccessRequiredMixin, View):
+    def get_target_site(self, user):
+        if roles.is_site_restricted(user):
+            site = roles.user_site(user)
+            if site:
+                return site
+        if hasattr(user, "profile") and user.profile.site:
+            return user.profile.site
+        return Site.objects.filter(active=True).first() or Site.objects.first()
 
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        if roles.is_site_restricted(self.request.user):
-            kwargs["restrict_site"] = roles.user_site(self.request.user)
-        return kwargs
+    def get(self, request, *args, **kwargs):
+        site = self.get_target_site(request.user)
+        if not site:
+            messages.error(request, "No site available to raise an indent.")
+            return redirect("indents:indent_list")
 
-    def form_valid(self, form):
-        form.instance.raised_by = self.request.user
-        form.instance.created_by = self.request.user
-        response = super().form_valid(form)
-        messages.success(self.request, f"Draft indent {self.object.indent_number} created. Add items to submit.")
-        return response
+        indent = Indent.objects.create(
+            site=site,
+            raised_by=request.user,
+            created_by=request.user,
+            status=Indent.Status.DRAFT,
+        )
+        messages.success(request, f"Draft indent {indent.indent_number} created.")
+        return redirect("indents:indent_detail", pk=indent.pk)
 
-    def get_success_url(self):
-        return reverse("indents:indent_detail", args=[self.object.pk])
+    def post(self, request, *args, **kwargs):
+        return self.get(request, *args, **kwargs)
 
 
 class IndentDetailView(IndentAccessRequiredMixin, DetailView):
@@ -87,10 +120,28 @@ class IndentDetailView(IndentAccessRequiredMixin, DetailView):
         ctx = super().get_context_data(**kwargs)
         indent = self.object
         user = self.request.user
-        ctx["line_form"] = IndentLineForm()
         ctx["reason_form"] = ReasonForm()
         ctx["can_manage_po"] = roles.can_manage_purchase_orders(user)
         ctx["estimated_value"] = indent.estimated_value()
+        ctx["unit_choices"] = Item.Unit.choices
+
+        stock_map = {
+            sb.item_id: sb.quantity
+            for sb in StockBalance.objects.filter(site=indent.site)
+        }
+
+        items_data = []
+        for item in Item.objects.filter(active=True).order_by("name"):
+            items_data.append({
+                "id": item.pk,
+                "name": item.name,
+                "code": item.code,
+                "unit": item.unit,
+                "unit_display": item.get_unit_display(),
+                "stock": stock_map.get(item.pk, Decimal("0.000")),
+            })
+        ctx["existing_items"] = items_data
+
         from purchase.models import ApprovalRule
         ctx["can_approve"] = (
             indent.status == Indent.Status.PENDING_APPROVAL
@@ -105,16 +156,79 @@ class IndentLineCreateView(IndentAccessRequiredMixin, View):
         if not indent.is_editable:
             messages.error(request, "This indent is no longer editable.")
             return _lines_section_response(request, indent)
-        form = IndentLineForm(request.POST)
-        if form.is_valid():
-            line = form.save(commit=False)
-            line.indent = indent
-            line.created_by = request.user
-            line.save()
+
+        item_description = request.POST.get("item_description", "").strip()
+        existing_item_id = request.POST.get("existing_item_id", "").strip()
+        unit = request.POST.get("unit", "").strip()
+        quantity_str = request.POST.get("quantity", "").strip()
+        present_stock_str = request.POST.get("present_stock", "0").strip()
+        required_by_date_str = request.POST.get("required_by_date", "").strip()
+        purpose = request.POST.get("purpose", "").strip()
+
+        if not item_description:
+            messages.error(request, "Item description is required.")
+            return _lines_section_response(request, indent)
+
+        try:
+            quantity = Decimal(quantity_str)
+            if quantity <= 0:
+                raise ValueError()
+        except (ValueError, TypeError, InvalidOperation):
+            messages.error(request, "Please enter a valid positive quantity.")
+            return _lines_section_response(request, indent)
+
+        present_stock = Decimal("0.000")
+        if present_stock_str:
+            try:
+                present_stock = Decimal(present_stock_str)
+            except (ValueError, TypeError, InvalidOperation):
+                pass
+
+        required_by_date = None
+        if required_by_date_str:
+            try:
+                required_by_date = parse_date(required_by_date_str)
+            except Exception:
+                pass
+
+        item = None
+        if existing_item_id:
+            item = Item.objects.filter(pk=existing_item_id, active=True).first()
+
+        if not item:
+            item = Item.objects.filter(name__iexact=item_description, active=True).first()
+
+        if not item:
+            if not unit:
+                unit = Item.Unit.NOS
+            from masters.models import ItemCategory
+            category = ItemCategory.objects.first()
+            if not category:
+                category = ItemCategory.objects.create(name="General")
+            item = Item.objects.create(
+                name=item_description,
+                unit=unit,
+                category=category,
+                gst_rate=Decimal("18.00"),
+                active=True,
+            )
         else:
-            messages.error(request, "Could not add item: " + "; ".join(
-                f"{field}: {', '.join(errs)}" for field, errs in form.errors.items()
-            ))
+            unit = item.unit
+            sb = StockBalance.objects.filter(site=indent.site, item=item).first()
+            if sb:
+                present_stock = sb.quantity
+
+        line = IndentLine.objects.create(
+            indent=indent,
+            item=item,
+            quantity=quantity,
+            unit=unit,
+            present_stock=present_stock,
+            required_by_date=required_by_date,
+            purpose=purpose,
+            created_by=request.user,
+        )
+
         indent.refresh_from_db()
         return _lines_section_response(request, indent)
 
@@ -147,14 +261,68 @@ class IndentLineRejectView(IndentConversionRequiredMixin, View):
 class ItemSearchView(IndentAccessRequiredMixin, View):
     def get(self, request):
         q = request.GET.get("q", "").strip()
+        site_id = request.GET.get("site_id")
         items = []
         if q:
-            items = list(
-                Item.objects.filter(active=True).filter(
-                    Q(name__icontains=q) | Q(code__icontains=q) | Q(aliases__alias_name__icontains=q)
-                ).distinct()[:10]
-            )
+            items_qs = Item.objects.filter(active=True).filter(
+                Q(name__icontains=q) | Q(code__icontains=q) | Q(aliases__alias_name__icontains=q)
+            ).distinct()[:15]
+
+            site = None
+            if site_id:
+                site = Site.objects.filter(pk=site_id).first()
+
+            items = []
+            for item in items_qs:
+                stock_qty = Decimal("0.000")
+                if site:
+                    sb = StockBalance.objects.filter(site=site, item=item).first()
+                    if sb:
+                        stock_qty = sb.quantity
+                items.append({
+                    "id": item.pk,
+                    "name": item.name,
+                    "code": item.code,
+                    "unit": item.unit,
+                    "unit_display": item.get_unit_display(),
+                    "stock": stock_qty,
+                })
         return render(request, "indents/_item_search_results.html", {"items": items})
+
+
+class VendorRatesView(IndentAccessRequiredMixin, View):
+    def get(self, request):
+        vendor_id = request.GET.get("vendor_id")
+        rates = {}
+        if vendor_id:
+            from masters.models import Vendor, RateContract
+            from purchase.models import PurchaseOrderLine
+            vendor = Vendor.objects.filter(pk=vendor_id).first()
+            if vendor:
+                raw_item_ids = request.GET.getlist("item_ids")
+                item_ids = []
+                for raw in raw_item_ids:
+                    for part in raw.split(","):
+                        part = part.strip()
+                        if part.isdigit():
+                            item_ids.append(int(part))
+
+                for item_id in item_ids:
+                    # 1. Check last PO line for this vendor & item
+                    last_po_line = PurchaseOrderLine.objects.filter(
+                        po__vendor=vendor, item_id=item_id
+                    ).order_by("-created_at").first()
+
+                    if last_po_line:
+                        rates[str(item_id)] = str(last_po_line.rate)
+                    else:
+                        # 2. Check active rate contract
+                        contract_rate = RateContract.current_rate(vendor, item_id)
+                        if contract_rate is not None:
+                            rates[str(item_id)] = str(contract_rate)
+                        else:
+                            rates[str(item_id)] = ""
+        return JsonResponse(rates)
 
 
 class IndentSubmitView(IndentAccessRequiredMixin, View):
@@ -235,14 +403,24 @@ class IndentConvertView(IndentConversionRequiredMixin, View):
         vendor_id = request.POST.get("vendor")
         vendor = get_object_or_404(Vendor, pk=vendor_id)
         line_qtys = {}
+        line_rates = {}
+
         for line in indent.lines.all():
-            raw = request.POST.get(f"qty_{line.pk}", "").strip()
-            if raw:
+            raw_qty = request.POST.get(f"qty_{line.pk}", "").strip()
+            raw_rate = request.POST.get(f"rate_{line.pk}", "").strip()
+
+            if raw_qty:
                 try:
-                    from decimal import Decimal, InvalidOperation
-                    qty = Decimal(raw)
+                    qty = Decimal(raw_qty)
                     if qty > 0:
                         line_qtys[line] = qty
+                        if raw_rate:
+                            try:
+                                line_rates[line] = Decimal(raw_rate)
+                            except InvalidOperation:
+                                line_rates[line] = Decimal("0.00")
+                        else:
+                            line_rates[line] = None
                 except InvalidOperation:
                     continue
 
@@ -250,6 +428,8 @@ class IndentConvertView(IndentConversionRequiredMixin, View):
             messages.error(request, "Select at least one item quantity to order.")
             return redirect("indents:indent_convert", pk=pk)
 
-        po = convert_indent_lines_to_po(line_qtys, vendor=vendor, site=indent.site, user=request.user)
+        po = convert_indent_lines_to_po(
+            line_qtys, vendor=vendor, site=indent.site, user=request.user, line_rates=line_rates
+        )
         messages.success(request, f"Draft PO {po.po_number} created from {indent.indent_number}.")
         return redirect("purchase:po_detail", pk=po.pk)

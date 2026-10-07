@@ -44,9 +44,11 @@ def overdue_purchase_orders(user):
 
 
 def vendor_ledger(vendor):
-    pos = vendor.purchase_orders.select_related("site").order_by("-created_at")
-    open_value = sum((po.grand_total for po in pos if po.status in OPEN_STATUSES), start=0)
-    return {"purchase_orders": pos, "open_value": open_value}
+    pos = vendor.purchase_orders.select_related("site").prefetch_related("lines").order_by("-created_at")
+    open_pos = [po for po in pos if po.status in OPEN_STATUSES]
+    open_value = sum((po.grand_total for po in open_pos), start=0)
+    received_value = sum((po.received_value for po in open_pos), start=0)
+    return {"purchase_orders": pos, "open_value": open_value, "received_value": received_value}
 
 
 def procurement_lead_time():
